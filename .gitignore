@@ -1,0 +1,23 @@
+# Құпия мәндер мен кілттер — репозиторийге ЖІБЕРІЛМЕЙДІ
+.env
+*.env
+serviceAccount*.json
+*firebase-adminsdk*.json
+credentials*.json
+keys/
+
+# Жергілікті деректер
+instance/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Құжаттарды құрастыру құралдары
+docs/_build/node_modules/
+
+# Жергілікті баптаулар
+.claude/

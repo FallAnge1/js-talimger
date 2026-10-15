@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: js-talimger
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn "app:create_app()" --workers 2 --timeout 150 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      - key: STORAGE
+        value: firestore
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: GEMINI_FALLBACK_MODELS
+        value: gemini-3.1-flash-lite
+      # Құпия мәндер Render панелінде қолмен енгізіледі (репозиторийде сақталмайды):
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
+      - key: RESEARCHER_PASSWORD
+        sync: false

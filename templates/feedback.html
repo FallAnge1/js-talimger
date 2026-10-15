@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Кері байланыс — JS-Тәлімгер{% endblock %}
+{% block content %}
+<a class="small" href="{{ url_for('tasks') if participant else url_for('researcher') }}">← Артқа</a>
+<h1>Кері байланыс: {{ task.task_id }}. {{ task.title }}</h1>
+<p class="muted small">Жауап коды: <code>{{ resp.response_id }}</code> · жіберілген уақыты: {{ resp.submitted_at|kz_time }}</p>
+
+<div class="flash flash-success">Жауабыңыз бұлттық деректер қорында сақталды.</div>
+
+{% set reviewed = review and review.status in ('confirmed', 'corrected') %}
+
+{% if reviewed %}
+  <section class="card review-card">
+    <span class="badge ok">Педагог тексерген кері байланыс</span>
+    <p class="score-big">{{ review.teacher_score }} / {{ task.max_score }}</p>
+    {% if review.corrected_feedback %}<p class="pre">{{ review.corrected_feedback }}</p>{% endif %}
+    {% if review.teacher_comment %}<p class="pre"><b>Педагог пікірі:</b> {{ review.teacher_comment }}</p>{% endif %}
+  </section>
+{% endif %}
+
+{% if resp.ai_status in ('done', 'invalid') and ai %}
+  <section class="card">
+    {% if not reviewed %}
+      <span class="badge warn">ЖИ ұсынған, педагог тексермеген кері байланыс</span>
+    {% else %}
+      <span class="badge">Бастапқы ЖИ талдауы</span>
+    {% endif %}
+    {% if ai.suggested_score is not none %}
+      <p>ЖИ ұсынған балл: <b>{{ ai.suggested_score }} / {{ task.max_score }}</b></p>
+    {% endif %}
+
+    {% if ai.strengths %}
+      <h3>✅ Дұрыс орындалған тұстар</h3>
+      <ul>{% for s in ai.strengths %}<li>{{ s }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if ai.errors %}
+      <h3>⚠️ Анықталған қателер</h3>
+      <ul>{% for e in ai.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if ai.recommendation %}
+      <h3>➡️ Келесі қадам</h3>
+      <p class="pre">{{ ai.recommendation }}</p>
+    {% endif %}
+    {% if ai.criteria_scores %}
+      <details>
+        <summary>Рубрика бойынша талдау</summary>
+        <table class="table">
+          <thead><tr><th>Критерий</th><th>Балл</th><th>Түсініктеме</th></tr></thead>
+          <tbody>
+          {% for c in ai.criteria_scores %}
+            <tr><td>{{ c.criterion }}</td><td>{{ c.score }} / {{ c.max }}</td><td>{{ c.comment }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    {% endif %}
+    {% if resp.ai_status == 'invalid' %}
+      <p class="muted small">ЖИ жауабының құрылымы толық емес, сондықтан бұл нәтиже міндетті түрде педагог тексеруін қажет етеді.</p>
+    {% endif %}
+  </section>
+{% elif not reviewed %}
+  <section class="card">
+    <div class="flash flash-warning">Жауабыңыз сақталды. Кері байланысты кейін алуға болады.</div>
+    <p class="muted small">ЖИ сервисі уақытша қолжетімсіз болды. Төмендегі батырма арқылы қайта сұрауға болады —
+      жауабыңыз қайта сақталмайды, көшірме жасалмайды.</p>
+    <form method="post" action="{{ url_for('retry_feedback', response_id=resp.response_id) }}" data-submit-once>
+      <button class="btn" type="submit" data-loading="Сұрау жіберілуде…">Кері байланысты қайта сұрау</button>
+    </form>
+  </section>
+{% endif %}
+
+<section class="card">
+  <h3>Сіздің жауабыңыз</h3>
+  <pre class="code">{{ resp.answer_text }}</pre>
+</section>
+{% endblock %}

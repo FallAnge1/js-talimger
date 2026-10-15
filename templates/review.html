@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Тексеру {{ resp.response_id }} — JS-Тәлімгер{% endblock %}
+{% block content %}
+<a class="small" href="{{ url_for('researcher') }}">← Зерттеуші беті</a>
+<h1>Жауапты тексеру <code>{{ resp.response_id }}</code></h1>
+<p class="muted small">Қатысушы: <b>{{ resp.participant_code }}</b> · Тапсырма: <b>{{ task.task_id }} (v{{ resp.task_version }}) — {{ task.title }}</b> ·
+  Жіберілді: {{ resp.submitted_at|kz_time }} · ЖИ сұраныс саны: {{ resp.ai_attempts or 0 }}</p>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>1. Бастапқы жауап</h2>
+    <pre class="code">{{ resp.answer_text }}</pre>
+    <details>
+      <summary>Тапсырма мен рубрика</summary>
+      <pre class="task-text">{{ task.text }}</pre>
+      <ul>{% for c in task.criteria %}<li>{{ c.name }} — 0–{{ c.max }}</li>{% endfor %}</ul>
+      <p class="small"><b>Күтілетін жауап:</b></p>
+      <pre class="code">{{ task.expected_answer }}</pre>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>2. ЖИ талдауы</h2>
+    <p><span class="badge {{ 'ok' if resp.ai_status == 'done' else 'warn' }}">{{ AI_STATUS_LABELS[resp.ai_status] }}</span></p>
+    {% if resp.ai_error %}<p class="muted small">Ескерту: {{ resp.ai_error }}</p>{% endif %}
+    {% if ai %}
+      <p class="small muted">Модель: {{ ai.model }} · сұраныс нұсқасы: {{ ai.prompt_version }} · {{ ai.created_at|kz_time }}</p>
+      <p>Ұсынылған балл: <b>{{ ai.suggested_score if ai.suggested_score is not none else '—' }} / {{ task.max_score }}</b>
+        {% if ai.needs_review %}<span class="badge warn">ЖИ педагог тексеруін сұрайды</span>{% endif %}</p>
+      {% if ai.criteria_scores %}
+        <table class="table">
+          <thead><tr><th>Критерий</th><th>Балл</th><th>Түсініктеме</th></tr></thead>
+          <tbody>{% for c in ai.criteria_scores %}<tr><td>{{ c.criterion }}</td><td>{{ c.score }}/{{ c.max }}</td><td>{{ c.comment }}</td></tr>{% endfor %}</tbody>
+        </table>
+      {% endif %}
+      <p><b>Дұрыс тұстары:</b></p><ul>{% for s in ai.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+      <p><b>Қателер:</b></p><ul>{% for e in ai.errors %}<li>{{ e }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+      <p><b>Ұсыныс:</b></p><p class="pre">{{ ai.recommendation or '—' }}</p>
+      {% if not ai.valid %}
+        <details><summary>ЖИ-дің бастапқы жауабы (құрылымы бұзылған)</summary><pre class="code">{{ ai.raw_text }}</pre></details>
+      {% endif %}
+    {% endif %}
+    {% if resp.ai_status != 'done' %}
+      <form method="post" action="{{ url_for('retry_feedback', response_id=resp.response_id) }}" data-submit-once>
+        <input type="hidden" name="back" value="review">
+        <button class="btn btn-ghost" type="submit" data-loading="Сұрау жіберілуде…">ЖИ талдауын қайта сұрау</button>
+      </form>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <h2>3. Педагог тексеруі</h2>
+  <p class="muted small">ЖИ нәтижесі өзгертілмейді: педагог бағасы мен түзетуі бөлек сақталады.</p>
+  <form method="post" class="stack">
+    <div class="grid-2">
+      <div class="stack">
+        <label for="teacher_score">Педагог бағасы (0–{{ task.max_score }})</label>
+        <input id="teacher_score" name="teacher_score" type="number" min="0" max="{{ task.max_score }}"
+               value="{{ review.teacher_score if review and review.teacher_score is not none else '' }}">
+      </div>
+      <div class="stack">
+        <label for="status">Тексеру мәртебесі</label>
+        <select id="status" name="status">
+          {% for value, label in REVIEW_STATUS_LABELS.items() %}
+            <option value="{{ value }}" {% if (review.status if review else 'not_reviewed') == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <label for="corrected_feedback">Түзетілген кері байланыс (қатысушыға көрсетіледі)</label>
+    <textarea id="corrected_feedback" name="corrected_feedback" rows="5">{{ review.corrected_feedback if review else '' }}</textarea>
+    <label for="teacher_comment">Педагог түсініктемесі (қатысушыға көрсетіледі)</label>
+    <textarea id="teacher_comment" name="teacher_comment" rows="3">{{ review.teacher_comment if review else '' }}</textarea>
+    <label for="diff_reason">ЖИ мен педагог бағасының айырмашылық себебі (тек зерттеу үшін)</label>
+    <textarea id="diff_reason" name="diff_reason" rows="3">{{ review.diff_reason if review else '' }}</textarea>
+    <button class="btn" type="submit">Тексеруді сақтау</button>
+    {% if review %}<p class="muted small">Соңғы сақталған уақыт: {{ review.reviewed_at|kz_time }}</p>{% endif %}
+  </form>
+</section>
+{% endblock %}

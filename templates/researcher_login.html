@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Зерттеушіге кіру — JS-Тәлімгер{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Зерттеуші беті</h1>
+  {% if configured %}
+    <p class="muted">Бұл бет тек зерттеушіге арналған. Құпиясөзді енгізіңіз.</p>
+    <form method="post" class="stack">
+      <label for="password">Құпиясөз</label>
+      <input id="password" type="password" name="password" required autocomplete="current-password">
+      <button class="btn" type="submit">Кіру</button>
+    </form>
+  {% else %}
+    <div class="flash flash-warning">Зерттеушіге кіру өшірулі: серверде RESEARCHER_PASSWORD орта айнымалысы бапталмаған.</div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Тапсырмалар — JS-Тәлімгер{% endblock %}
+{% block content %}
+<h1>Тапсырмалар</h1>
+
+<section class="card row-between">
+  <div>
+    <h2>1. Диагностикалық тест</h2>
+    {% if test_result %}
+      <p>Орындалды: <b>{{ test_result.score }} / {{ test_result.max_score }}</b></p>
+    {% else %}
+      <p class="muted">10 сұрақ, JavaScript негіздері</p>
+    {% endif %}
+  </div>
+  {% if test_result %}
+    <a class="btn btn-ghost" href="{{ url_for('test_result') }}">Нәтижені қарау</a>
+  {% else %}
+    <a class="btn" href="{{ url_for('test') }}">Тестті бастау</a>
+  {% endif %}
+</section>
+
+<h2>2. Практикалық тапсырмалар</h2>
+{% for t in tasks %}
+  {% set r = responses.get(t.task_id) %}
+  <section class="card row-between">
+    <div>
+      <h3>{{ t.task_id }}. {{ t.title }}</h3>
+      <p class="muted small">Өлшенетін дағды: {{ t.skill }} · ең жоғары балл: {{ t.max_score }}</p>
+      {% if r %}
+        <span class="badge {{ 'ok' if r.ai_status == 'done' else 'warn' }}">Жауап сақталды · {{ AI_STATUS_LABELS[r.ai_status] }}</span>
+      {% endif %}
+    </div>
+    {% if r %}
+      <a class="btn btn-ghost" href="{{ url_for('feedback', response_id=r.response_id) }}">Кері байланыс</a>
+    {% else %}
+      <a class="btn" href="{{ url_for('task', task_id=t.task_id) }}">Орындау</a>
+    {% endif %}
+  </section>
+{% endfor %}
+{% endblock %}

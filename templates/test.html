@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Тест — JS-Тәлімгер{% endblock %}
+{% block content %}
+<h1>{{ test.title }}</h1>
+<p class="muted">Әр сұраққа бір дұрыс жауапты таңдаңыз. Тестті бір рет тапсыруға болады.</p>
+
+<form method="post" class="stack" data-submit-once>
+  {% for q in test.questions %}
+  <fieldset class="card question">
+    <legend><span class="qnum">{{ loop.index }}</span> {{ q.text }}</legend>
+    {% for opt in q.options %}
+      <label class="option">
+        <input type="radio" name="{{ q.id }}" value="{{ loop.index0 }}" required
+               {% if chosen.get(q.id) == loop.index0 %}checked{% endif %}>
+        <code>{{ opt }}</code>
+      </label>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+  <button class="btn" type="submit" data-loading="Сақталуда…">Тестті аяқтау</button>
+</form>
+{% endblock %}

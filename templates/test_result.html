@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Тест нәтижесі — JS-Тәлімгер{% endblock %}
+{% block content %}
+<h1>Тест нәтижесі</h1>
+<section class="card">
+  <p class="score-big">{{ result.score }} / {{ result.max_score }}</p>
+  <p class="muted">Нәтиже бұлттық деректер қорында сақталды.</p>
+  <table class="table">
+    <thead><tr><th>№</th><th>Тақырып</th><th>Нәтиже</th></tr></thead>
+    <tbody>
+    {% for a in result.answers %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ a.topic }}</td>
+        <td>{% if a.correct %}<span class="badge ok">дұрыс</span>{% else %}<span class="badge bad">қайталау қажет</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+<a class="btn" href="{{ url_for('tasks') }}">Практикалық тапсырмаларға өту</a>
+{% endblock %}

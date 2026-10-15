@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ task.title }} — JS-Тәлімгер{% endblock %}
+{% block content %}
+<a class="small" href="{{ url_for('tasks') }}">← Тапсырмалар тізімі</a>
+<h1>{{ task.task_id }}. {{ task.title }}</h1>
+
+<section class="card">
+  <h2>Тапсырма</h2>
+  <pre class="task-text">{{ task.text }}</pre>
+  <details>
+    <summary>Бағалау критерийлері ({{ task.max_score }} балл)</summary>
+    <ul>
+      {% for c in task.criteria %}<li>{{ c.name }} — 0–{{ c.max }} балл</li>{% endfor %}
+    </ul>
+  </details>
+</section>
+
+<form method="post" class="card stack" data-submit-once>
+  <div class="row-between">
+    <span>Қатысушы коды: <b>{{ participant }}</b></span>
+    <span class="muted small"><span data-counter-for="answer">0</span> / {{ max_len }} таңба</span>
+  </div>
+  <label for="answer">Сіздің жауабыңыз: код және қысқаша түсіндірме</label>
+  <textarea id="answer" name="answer" rows="16" maxlength="{{ max_len }}" spellcheck="false"
+            class="code-input" placeholder="function ... {&#10;  ...&#10;}&#10;&#10;Түсіндірме: ...">{{ answer }}</textarea>
+  <p class="muted small">Код серверде орындалмайды, ол мәтін ретінде талданады. Жауапты бір рет жіберуге болады.</p>
+  <button class="btn" type="submit" data-loading="ЖИ жауабыңызды талдап жатыр… (10–30 секунд)">Жауапты жіберу</button>
+</form>
+{% endblock %}

@@ -1,0 +1,17 @@
+{
+  "name": "js-talimger-docs",
+  "version": "1.0.0",
+  "description": "Есеп, қосымшалар және таныстырылымды құрастыру",
+  "main": "index.js",
+  "scripts": {
+    "build": "python -X utf8 export_data.py && python -X utf8 diagram.py && python -X utf8 diagram.py --bare && node build_rubrics.js && node build_ai_log.js && node build_report.js && node build_slides.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "docx": "^9.11.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}
