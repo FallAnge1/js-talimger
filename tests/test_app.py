@@ -31,9 +31,16 @@ VALID_AI = {
 @pytest.fixture
 def ai_calls(monkeypatch):
     """Gemini шақыруын алмастырады. calls["reply"] — ЖИ қайтаратын мәтін немесе Exception."""
-    calls = {"count": 0, "reply": json.dumps(VALID_AI, ensure_ascii=False), "prompts": []}
+    calls = {"count": 0, "reply": json.dumps(VALID_AI, ensure_ascii=False), "prompts": [],
+             "hint_reply": json.dumps({"hint": "Бастапқы мәнді теріс сандармен тексеріп көріңіз."}, ensure_ascii=False),
+             "hint_prompts": []}
 
-    def fake_call(prompt):
+    def fake_call(prompt, system=None, schema=None, temperature=0.2):
+        if schema is ai_service.HINT_SCHEMA:
+            calls["hint_prompts"].append(prompt)
+            if isinstance(calls["hint_reply"], Exception):
+                raise calls["hint_reply"]
+            return "gemini-test", calls["hint_reply"]
         calls["count"] += 1
         calls["prompts"].append(prompt)
         if isinstance(calls["reply"], Exception):

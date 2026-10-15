@@ -5,12 +5,28 @@
 <a class="back" href="{{ url_for('tasks') if participant else url_for('researcher') }}">{{ icon("arrow-left", 16) }} Артқа</a>
 <h1>{{ task.title }}</h1>
 <div class="meta" style="margin-bottom:6px">
+  <span class="badge">{{ icon("refresh", 14) }} {{ resp.attempt or 1 }}-талпыныс</span>
   <span>{{ icon("hash", 15) }} {{ resp.response_id }}</span>
   <span>{{ icon("clock", 15) }} {{ resp.submitted_at|kz_time }}</span>
   <span class="badge ok">{{ icon("database", 14) }} Жауабыңыз бұлттық деректер қорында сақталды</span>
 </div>
 
 {% set reviewed = review and review.status in ('confirmed', 'corrected') %}
+
+{% if attempts|length > 1 %}
+<div class="attempts">
+  {% for a in attempts %}
+    {% if not loop.first %}<span class="attempt-arrow">{{ icon("arrow-right", 16) }}</span>{% endif %}
+    <a class="attempt {{ 'current' if a.response_id == resp.response_id }}" href="{{ url_for('feedback', response_id=a.response_id) }}">
+      <span>{{ a.attempt or 1 }}-талпыныс</span><b>{{ a.ai_score if a.ai_score is not none else '—' }}/{{ task.max_score }}</b>
+    </a>
+  {% endfor %}
+  {% set first, last = attempts[0].ai_score, attempts[-1].ai_score %}
+  {% if first is not none and last is not none and last != first %}
+    <span class="badge {{ 'ok' if last > first else 'bad' }}">{{ icon("trending", 14) }} {{ '%+d'|format(last - first) }} балл</span>
+  {% endif %}
+</div>
+{% endif %}
 
 <div class="grid grid-2" style="align-items:start;margin-top:16px">
   <div class="stack-lg">
@@ -75,9 +91,64 @@
     {% endif %}
   </div>
 
-  <div class="card stack-lg">
-    <p class="section-title" style="margin:0">{{ icon("code", 16) }} Сіздің жауабыңыз</p>
-    <pre class="code">{{ resp.answer_text }}</pre>
+  <div class="stack-lg">
+    <div class="card stack-lg">
+      <p class="section-title" style="margin:0">{{ icon("code", 16) }} Жауап ({{ resp.attempt or 1 }}-талпыныс)</p>
+      <pre class="code">{{ resp.answer_text }}</pre>
+    </div>
+
+    {% if hints or can_hint %}
+    <div class="card stack-lg" id="hints">
+      <div class="row-between">
+        <p class="section-title" style="margin:0">{{ icon("bulb", 16) }} ЖИ кеңесшісі</p>
+        <span class="badge">{{ hints|length }} / {{ hints|length + hints_left }}</span>
+      </div>
+      {% for h in hints %}
+        {% if h.question %}<div class="bubble me">{{ h.question }}</div>{% endif %}
+        <div class="bubble ai">{{ icon("sparkles", 16) }}<span>{{ h.hint }}</span></div>
+      {% endfor %}
+      {% if can_hint %}
+        <form method="post" action="{{ url_for('hint', response_id=resp.response_id) }}" class="stack" data-submit-once>
+          <input type="text" name="question" maxlength="{{ max_question }}" autocomplete="off"
+                 placeholder="Сұрағыңыз (міндетті емес): мысалы, неге max = 0 қате?">
+          <button class="btn btn-ghost" type="submit" data-loading="ЖИ ойланып жатыр…">{{ icon("bulb", 18) }} Кеңес алу · қалды {{ hints_left }}</button>
+          <p class="hint">ЖИ дайын шешімді бермейді — тек бағыт көрсетеді.</p>
+        </form>
+      {% elif owner %}
+        <p class="hint">{{ icon("info", 14) }} Бұл тапсырмаға кеңес саны таусылды.</p>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 </div>
+
+{% if owner %}
+<div class="card section stack-lg" id="revise">
+  <div class="row">
+    {{ tile("pencil", "violet") }}
+    <div>
+      <h2 style="margin:0">Қатемен жұмыс</h2>
+      <p class="muted small" style="margin:0">Кері байланыс пен кеңеске сүйеніп кодты түзетіңіз — ЖИ қайта тексереді. Бастапқы жауап өзгермейді.</p>
+    </div>
+  </div>
+  {% if can_revise and ai and ai.suggested_score == task.max_score %}
+    <p class="badge ok">{{ icon("check", 14) }} Толық балл — түзету қажет емес</p>
+  {% elif can_revise %}
+    <form method="post" action="{{ url_for('revise', response_id=resp.response_id) }}" class="stack" data-submit-once>
+      <div class="row-between">
+        <label for="answer">{{ (resp.attempt or 1) + 1 }}-талпыныс · түзетілген код + түсіндірме</label>
+        <span class="hint">қалған мүмкіндік: {{ revisions_left }} · <span data-counter-for="answer">0</span> / {{ max_len }}</span>
+      </div>
+      <textarea id="answer" name="answer" rows="12" maxlength="{{ max_len }}" spellcheck="false" class="code-input">{{ resp.answer_text }}</textarea>
+      <button class="btn" type="submit" data-loading="ЖИ қайта тексеріп жатыр… (10–30 с)">{{ icon("send", 18) }} Түзетілген жауапты жіберу</button>
+    </form>
+  {% elif attempts[-1].response_id != resp.response_id %}
+    <a class="btn btn-ghost" href="{{ url_for('feedback', response_id=attempts[-1].response_id) }}">{{ icon("arrow-right", 18) }} Соңғы талпынысқа өту</a>
+  {% elif (resp.attempt or 1) >= 3 %}
+    <p class="badge ok">{{ icon("check", 14) }} Барлық түзету мүмкіндігі пайдаланылды</p>
+  {% else %}
+    <p class="hint">{{ icon("info", 14) }} Түзету үшін алдымен ЖИ кері байланысын алыңыз.</p>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

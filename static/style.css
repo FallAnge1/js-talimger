@@ -183,6 +183,18 @@ details[open] summary { margin-bottom: 10px; }
 .bar { height: 8px; border-radius: 999px; background: #eef1f6; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--warn); border-radius: 999px; }
 
+/* ---------- қатемен жұмыс ---------- */
+.attempts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 4px; }
+.attempt { display: inline-flex; flex-direction: column; padding: 8px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); color: var(--text-2); font-size: .8rem; line-height: 1.25; }
+.attempt b { font-size: 1.05rem; color: var(--text); }
+.attempt:hover { text-decoration: none; border-color: #b9c0f4; }
+.attempt.current { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.attempt-arrow { color: var(--muted); display: inline-flex; }
+.bubble { padding: 10px 14px; border-radius: 14px; font-size: .94rem; max-width: 92%; white-space: pre-wrap; }
+.bubble.me { align-self: flex-end; margin-left: auto; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; width: fit-content; }
+.bubble.ai { display: flex; gap: 10px; background: var(--violet-soft); color: #3b1d75; border-bottom-left-radius: 4px; }
+.bubble.ai .icon { color: var(--violet); margin-top: 2px; }
+
 .muted { color: var(--muted); }
 .small { font-size: .86rem; }
 .nowrap { white-space: nowrap; }

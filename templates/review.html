@@ -12,6 +12,17 @@
   <span>{{ icon("refresh", 15) }} ЖИ сұраныс: {{ resp.ai_attempts or 0 }}</span>
 </div>
 
+{% if attempts|length > 1 %}
+<div class="attempts" style="margin-bottom:16px">
+  {% for a in attempts %}
+    {% if not loop.first %}<span class="attempt-arrow">{{ icon("arrow-right", 16) }}</span>{% endif %}
+    <a class="attempt {{ 'current' if a.response_id == resp.response_id }}" href="{{ url_for('review', response_id=a.response_id) }}">
+      <span>{{ a.attempt or 1 }}-талпыныс</span><b>{{ a.ai_score if a.ai_score is not none else '—' }}/{{ task.max_score }}</b>
+    </a>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="grid grid-2" style="align-items:start">
   <div class="card stack-lg">
     <p class="section-title" style="margin:0">{{ icon("code", 16) }} 1 · Бастапқы жауап</p>
@@ -65,6 +76,17 @@
     {% endif %}
   </div>
 </div>
+
+{% if hints %}
+<div class="card section stack-lg">
+  <p class="section-title" style="margin:0">{{ icon("bulb", 16) }} Қатысушы сұраған ЖИ кеңестері</p>
+  {% for h in hints %}
+    <div class="small muted">{{ h.attempt }}-талпыныстан кейін · {{ h.created_at|kz_time }} · {{ h.model }}</div>
+    {% if h.question %}<div class="bubble me">{{ h.question }}</div>{% endif %}
+    <div class="bubble ai">{{ icon("sparkles", 16) }}<span>{{ h.hint }}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <div class="card section">
   <p class="section-title">{{ icon("teacher", 16) }} 3 · Педагог тексеруі <span class="hint" style="text-transform:none;letter-spacing:0">— ЖИ нәтижесі өзгермейді, бөлек сақталады</span></p>

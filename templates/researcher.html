@@ -12,6 +12,7 @@
     <a class="btn btn-ghost" href="{{ url_for('export', name='responses', fmt='csv') }}">{{ icon("download", 18) }} CSV</a>
     <a class="btn btn-ghost" href="{{ url_for('export', name='tests', fmt='xlsx') }}">{{ icon("sheet", 18) }} Тест · Excel</a>
     <a class="btn btn-ghost" href="{{ url_for('export', name='tests', fmt='csv') }}">{{ icon("download", 18) }} CSV</a>
+    <a class="btn btn-ghost" href="{{ url_for('export', name='hints', fmt='xlsx') }}">{{ icon("bulb", 18) }} Кеңестер · Excel</a>
   </div>
 </div>
 
@@ -26,13 +27,20 @@
   <div class="card stat">{{ tile("check", "green") }}<div><b>{{ stats.exact_match }}/{{ stats.compared }}</b><span>баға толық сәйкес</span></div></div>
 </div>
 
+<p class="section-title">{{ icon("pencil", 16) }} Қатемен жұмыс</p>
+<div class="grid grid-3">
+  <div class="card stat">{{ tile("refresh", "violet") }}<div><b>{{ stats.revised_tasks }}</b><span>тапсырма түзетілді</span></div></div>
+  <div class="card stat">{{ tile("trending", "green") }}<div><b>{{ ('%+.2f'|format(stats.mean_gain)) if stats.mean_gain is not none else '—' }}</b><span>ЖИ балының орташа өсімі (1 → соңғы)</span></div></div>
+  <div class="card stat">{{ tile("bulb", "amber") }}<div><b>{{ stats.hints }}</b><span>ЖИ кеңесі сұралды</span></div></div>
+</div>
+
 <div class="card section">
   <p class="section-title">{{ icon("code", 16) }} Практикалық жауаптар</p>
   {% if rows %}
   <div class="table-scroll">
   <table class="table">
     <thead>
-      <tr><th>Жауап</th><th>Қатысушы</th><th>Тапсырма</th><th>Уақыты</th><th>ЖИ</th>
+      <tr><th>Жауап</th><th>Қатысушы</th><th>Тапсырма</th><th>#</th><th>Уақыты</th><th>ЖИ</th>
           <th>ЖИ балы</th><th>Педагог</th><th>Айырма</th><th>Тексеру</th><th></th></tr>
     </thead>
     <tbody>
@@ -41,6 +49,7 @@
         <td class="nowrap mono small">{{ r.resp.response_id }}</td>
         <td class="nowrap"><b>{{ r.resp.participant_code }}</b></td>
         <td class="nowrap">{{ r.resp.task_id }}</td>
+        <td class="nowrap">{% if r.attempt > 1 %}<span class="badge ai">{{ r.attempt }}</span>{% else %}1{% endif %}{% if r.hints and r.attempt == 1 %} <span title="ЖИ кеңесі">{{ icon("bulb", 14) }}{{ r.hints }}</span>{% endif %}</td>
         <td class="nowrap small muted">{{ r.resp.submitted_at|kz_time }}</td>
         <td><span class="badge {{ 'ok' if r.resp.ai_status == 'done' else 'warn' }}" title="{{ AI_STATUS_LABELS[r.resp.ai_status] }}">
           {{ icon("check" if r.resp.ai_status == 'done' else "alert", 14) }}</span></td>

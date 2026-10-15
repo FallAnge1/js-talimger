@@ -3,7 +3,7 @@
 {% block title %}Тапсырмалар — JS-Тәлімгер{% endblock %}
 {% block content %}
 {% set TASK_ICONS = {"P1": ("braces", "amber"), "P2": ("trending", "green"), "P3": ("pointer", "violet")} %}
-{% set done = (1 if test_result else 0) + responses|length %}
+{% set done = (1 if test_result else 0) + progress|length %}
 {% set total = 1 + tasks|length %}
 
 <div class="row-between">
@@ -31,7 +31,8 @@
   </div>
 
   {% for t in tasks %}
-    {% set r = responses.get(t.task_id) %}
+    {% set pr = progress.get(t.task_id) %}
+    {% set r = pr.latest if pr else none %}
     {% set ic = TASK_ICONS.get(t.task_id, ("code", "blue")) %}
     <div class="card task-card {{ 'done' if r }}">
       {{ tile(ic[0], ic[1]) }}
@@ -43,6 +44,11 @@
           {% if r %}
             <span class="badge {{ 'ok' if r.ai_status == 'done' else 'warn' }}">
               {{ icon("check" if r.ai_status == 'done' else "clock", 14) }} {{ AI_STATUS_LABELS[r.ai_status] }}</span>
+            {% if pr.count > 1 %}
+              <span class="badge ai">{{ icon("refresh", 14) }} {{ pr.count }} талпыныс{% if pr.first_score is not none and pr.last_score is not none %} · {{ pr.first_score }} → {{ pr.last_score }}{% endif %}</span>
+            {% elif pr.last_score is not none %}
+              <span class="badge">{{ pr.last_score }}/{{ t.max_score }}</span>
+            {% endif %}
           {% endif %}
         </div>
       </div>

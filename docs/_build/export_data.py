@@ -39,6 +39,8 @@ data = {
     "prompt_version": ai_service.PROMPT_VERSION,
     "default_model": os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
     "sample_prompt": ai_service.build_prompt(PRACTICAL_TASKS[0], MODEL_ANSWERS[1]["answer"]),
+    "hint_instruction": ai_service.HINT_INSTRUCTION,
+    "hint_prompt_version": ai_service.HINT_PROMPT_VERSION,
     "model_answers": MODEL_ANSWERS,
     "pilot": pilot,
     "pilot_v2": pilot_v2,

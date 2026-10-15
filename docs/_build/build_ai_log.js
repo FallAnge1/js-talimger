@@ -57,6 +57,8 @@ if (pilot) {
   rows.push([String(n++), ph("[күні]"), ph("[модель]"), "v1", "Модельдік жауаптармен нақты Gemini арқылы сынақ (python pilot/run_pilot.py)", ph("[нәтиже]"), ph("[түзетулер]")]);
 }
 rows.push([String(n++), "2026-10-15", data.fallback_model, data.prompt_version, "Бұлттағы нұсқаны тексеру (https://js-talimger.onrender.com): жауап жіберу, Firestore-ға сақтау, ЖИ кері байланысы", "Сәтті: негізгі модель лимиті таусылғандықтан қосалқы модель жауап берді (8/8 балл)", "Сынақ жазбалары өшірілді; күту уақыты өтсе де қосалқы модельге көшу енгізілді"]);
+rows.push([String(n++), "2026-10-15", data.default_model, data.hint_prompt_version, "Қатемен жұмыс: ЖИ кеңесшісінің жеке сұранысы (дайын шешімсіз бағыттаушы кеңес, бір тапсырмаға 2 рет)", "Автотесттер (имитация) өтті; нақты сапасы пилотта тексеріледі",
+  "Кеңестен код блоктары алынып тасталады; қатысушы сұрағы [[[ ]]] белгілерімен шектеледі; ЖИ қатесі кеңес санын азайтпайды; бұрынғы кеңестер сұранысқа қосылады"]);
 rows.push([String(n++), "—", data.default_model, data.prompt_version, "5–10 қатысушымен пилоттық тексеру", "Жоспарланған", "—"]);
 children.push(tableTitle("Ә.1-кесте – ЖИ сұраныстарының журналы"));
 children.push(table(["№", "Күні", "Модель", "Нұсқа", "Мақсаты / жағдай", "Нәтиже", "Магистрант енгізген түзетулер"], rows,
@@ -69,6 +71,9 @@ children.push(p({ text: "Жүйелік нұсқаулық (systemInstruction):"
 children.push(...codeBlock(data.system_instruction));
 children.push(p({ text: "Пайдаланушы сұранысының үлгісі (P1 тапсырмасы, модельдік жауап M02):", b: true }, { noIndent: true, keepNext: true, before: 160 }));
 children.push(...codeBlock(data.sample_prompt, 16));
+
+children.push(p({ text: `ЖИ кеңесшісінің жүйелік нұсқаулығы (нұсқа ${data.hint_prompt_version}):`, b: true }, { noIndent: true, keepNext: true, before: 160 }));
+children.push(...codeBlock(data.hint_instruction));
 
 children.push(h1("4. ЖИ жауабының үлгісі"));
 if (pilot) {

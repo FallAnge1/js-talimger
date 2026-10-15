@@ -32,6 +32,9 @@ KZ_TZ = timezone(timedelta(hours=5))
 CODE_RE = re.compile(r"^[A-Z0-9_-]{3,20}$")
 MIN_ANSWER_LEN = 15
 MAX_ANSWER_LEN = 5000
+MAX_ATTEMPTS = 3  # бастапқы жауап + 2 түзету
+MAX_HINTS = 2  # бір тапсырмаға ЖИ кеңесі
+MAX_QUESTION_LEN = 500
 
 AI_STATUS_LABELS = {
     "pending": "Талдау күтілуде",
@@ -195,6 +198,38 @@ def create_app(store=None):
     def can_view_response(resp):
         return session.get("researcher") or session.get("participant") == resp["participant_code"]
 
+    def is_owner(resp):
+        return session.get("participant") == resp["participant_code"]
+
+    def attempt_no(resp):
+        return resp.get("attempt", 1)
+
+    def root_of(resp):
+        return resp.get("root_id") or resp["response_id"]
+
+    def task_attempts(root_id):
+        """Бір тапсырмаға берілген барлық талпыныстар (бастапқы жауап және түзетулер)."""
+        items = [store.get("responses", root_id)]
+        items += store.query("responses", "root_id", root_id)
+        unique = {r["response_id"]: r for r in items if r}
+        return sorted(unique.values(), key=attempt_no)
+
+    def task_hints(root_id):
+        return sorted(store.query("hints", "root_id", root_id), key=lambda h: h["n"])
+
+    def ai_score(response_id):
+        fb = store.get("ai_feedback", response_id)
+        return fb.get("suggested_score") if fb else None
+
+    def answer_error(answer):
+        if not answer:
+            return "Жауап өрісі бос. Шешіміңізді енгізіңіз."
+        if len(answer) < MIN_ANSWER_LEN:
+            return f"Жауап тым қысқа. Кодыңызды және түсіндірмеңізді толығырақ жазыңыз (кемінде {MIN_ANSWER_LEN} таңба)."
+        if len(answer) > MAX_ANSWER_LEN:
+            return f"Жауап тым ұзын (ең көбі {MAX_ANSWER_LEN} таңба)."
+        return None
+
     # ---------- қатысушы беттері ----------
 
     @app.route("/")
@@ -273,11 +308,22 @@ def create_app(store=None):
     @participant_required
     def tasks():
         code = session["participant"]
-        responses = {r["task_id"]: r for r in store.query("responses", "participant_code", code)}
+        progress = {}
+        for t in practical_tasks():
+            root = store.get("responses", make_response_id(code, t["task_id"]))
+            if not root:
+                continue
+            attempts = task_attempts(root["response_id"])
+            progress[t["task_id"]] = {
+                "latest": attempts[-1],
+                "count": len(attempts),
+                "first_score": ai_score(attempts[0]["response_id"]),
+                "last_score": ai_score(attempts[-1]["response_id"]),
+            }
         return render_template(
             "tasks.html",
             tasks=practical_tasks(),
-            responses=responses,
+            progress=progress,
             test_result=store.get("test_results", code),
         )
 
@@ -295,12 +341,9 @@ def create_app(store=None):
             if existing:
                 flash("Бұл тапсырмаға жауабыңыз бұрын сақталған. Сақталған нәтиже көрсетілді.", "info")
                 return redirect(url_for("feedback", response_id=response_id))
-            if not answer:
-                flash("Жауап өрісі бос. Шешіміңізді енгізіңіз.", "error")
-            elif len(answer) < MIN_ANSWER_LEN:
-                flash(f"Жауап тым қысқа. Кодыңызды және түсіндірмеңізді толығырақ жазыңыз (кемінде {MIN_ANSWER_LEN} таңба).", "error")
-            elif len(answer) > MAX_ANSWER_LEN:
-                flash(f"Жауап тым ұзын (ең көбі {MAX_ANSWER_LEN} таңба).", "error")
+            error = answer_error(answer)
+            if error:
+                flash(error, "error")
             else:
                 created = store.create(
                     "responses",
@@ -314,6 +357,8 @@ def create_app(store=None):
                         "submitted_at": now_iso(),
                         "ai_status": "pending",
                         "ai_attempts": 0,
+                        "attempt": 1,
+                        "root_id": response_id,
                     },
                 )
                 if created:
@@ -331,13 +376,124 @@ def create_app(store=None):
             abort(404)
         if not can_view_response(resp):
             abort(403)
+        root_id = root_of(resp)
+        attempts = task_attempts(root_id)
+        hints = task_hints(root_id)
+        latest = attempts[-1]["response_id"] == response_id
+        ready = resp.get("ai_status") in ("done", "invalid")
         return render_template(
             "feedback.html",
             resp=resp,
             task=store.get("tasks", resp["task_id"]),
             ai=store.get("ai_feedback", response_id),
             review=store.get("teacher_review", response_id),
+            attempts=[dict(a, ai_score=ai_score(a["response_id"])) for a in attempts],
+            hints=hints,
+            owner=is_owner(resp),
+            can_revise=is_owner(resp) and latest and ready and attempt_no(resp) < MAX_ATTEMPTS,
+            revisions_left=MAX_ATTEMPTS - len(attempts),
+            hints_left=MAX_HINTS - len(hints),
+            can_hint=is_owner(resp) and latest and ready and len(hints) < MAX_HINTS,
+            max_len=MAX_ANSWER_LEN,
+            max_question=MAX_QUESTION_LEN,
         )
+
+    @app.post("/feedback/<response_id>/revise")
+    def revise(response_id):
+        """Қатемен жұмыс: түзетілген жауапты жаңа талпыныс ретінде сақтау (бастапқы жауап өзгермейді)."""
+        resp = store.get("responses", response_id)
+        if not resp:
+            abort(404)
+        if not is_owner(resp):
+            abort(403)
+        root_id = root_of(resp)
+        attempts = task_attempts(root_id)
+        if attempts[-1]["response_id"] != response_id:
+            return redirect(url_for("feedback", response_id=attempts[-1]["response_id"]))
+        n = attempt_no(resp) + 1
+        if n > MAX_ATTEMPTS:
+            flash(f"Түзету мүмкіндігі таусылды (ең көбі {MAX_ATTEMPTS - 1} рет).", "warning")
+            return redirect(url_for("feedback", response_id=response_id))
+        if resp.get("ai_status") not in ("done", "invalid"):
+            flash("Алдымен осы жауапқа ЖИ кері байланысын алыңыз.", "warning")
+            return redirect(url_for("feedback", response_id=response_id))
+
+        answer = request.form.get("answer", "").replace("\r\n", "\n").strip()
+        error = answer_error(answer)
+        if not error and answer == resp["answer_text"].strip():
+            error = "Жауап өзгермеген. Кері байланысқа сүйеніп, кодты түзетіңіз."
+        if error:
+            flash(error, "error")
+            return redirect(url_for("feedback", response_id=response_id) + "#revise")
+
+        new_id = f"{root_id}-{n}"
+        created = store.create(
+            "responses",
+            new_id,
+            {
+                "response_id": new_id,
+                "participant_code": resp["participant_code"],
+                "task_id": resp["task_id"],
+                "task_version": resp.get("task_version"),
+                "answer_text": answer,
+                "submitted_at": now_iso(),
+                "ai_status": "pending",
+                "ai_attempts": 0,
+                "attempt": n,
+                "root_id": root_id,
+                "parent_id": response_id,
+                "hints_before": len(task_hints(root_id)),
+            },
+        )
+        if created:
+            run_ai(new_id)
+        return redirect(url_for("feedback", response_id=new_id))
+
+    @app.post("/feedback/<response_id>/hint")
+    def hint(response_id):
+        """ЖИ-ден шешімді айтпайтын бағыттаушы кеңес сұрау (бір тапсырмаға ең көбі MAX_HINTS)."""
+        resp = store.get("responses", response_id)
+        if not resp:
+            abort(404)
+        if not is_owner(resp):
+            abort(403)
+        root_id = root_of(resp)
+        hints = task_hints(root_id)
+        back = redirect(url_for("feedback", response_id=response_id) + "#hints")
+        if len(hints) >= MAX_HINTS:
+            flash(f"Кеңес саны таусылды (бір тапсырмаға {MAX_HINTS}).", "warning")
+            return back
+        question = request.form.get("question", "").strip()[:MAX_QUESTION_LEN]
+        task_def = store.get("tasks", resp["task_id"])
+        fb = store.get("ai_feedback", response_id) or {}
+        try:
+            model, text, version = ai_service.generate_hint(
+                task_def, resp["answer_text"], fb.get("errors", []), [h["hint"] for h in hints], question
+            )
+        except ai_service.AIError as exc:
+            log.warning("ЖИ кеңесі қатесі %s: %s", response_id, exc)
+            flash("ЖИ кеңес бере алмады. Кеңес саны азайған жоқ — кейінірек қайталап көріңіз.", "warning")
+            return back
+        n = len(hints) + 1
+        store.create(
+            "hints",
+            f"{root_id}-H{n}",
+            {
+                "hint_id": f"{root_id}-H{n}",
+                "root_id": root_id,
+                "response_id": response_id,
+                "attempt": attempt_no(resp),
+                "participant_code": resp["participant_code"],
+                "task_id": resp["task_id"],
+                "n": n,
+                "question": question,
+                "hint": text,
+                "model": model,
+                "prompt_version": version,
+                "created_at": now_iso(),
+            },
+        )
+        return back
 
     @app.post("/feedback/<response_id>/retry")
     def retry_feedback(response_id):
@@ -377,6 +533,9 @@ def create_app(store=None):
         tasks_by_id = {t["task_id"]: t for t in store.list("tasks")}
         ai_by_id = {f["response_id"]: f for f in store.list("ai_feedback")}
         reviews = {r["response_id"]: r for r in store.list("teacher_review")}
+        hint_counts = {}
+        for h in store.list("hints"):
+            hint_counts[h["root_id"]] = hint_counts.get(h["root_id"], 0) + 1
         rows = []
         for resp in sorted(store.list("responses"), key=lambda r: r["submitted_at"]):
             rid = resp["response_id"]
@@ -394,6 +553,9 @@ def create_app(store=None):
                     "ai_score": ai_score,
                     "teacher_score": teacher_score,
                     "diff": diff,
+                    "attempt": attempt_no(resp),
+                    "root_id": root_of(resp),
+                    "hints": hint_counts.get(root_of(resp), 0),
                 }
             )
         return rows
@@ -404,7 +566,19 @@ def create_app(store=None):
         reviewed = [r for r in rows if r["review"] and r["review"].get("status") in ("confirmed", "corrected")]
         compared = [r for r in reviewed if r["diff"] is not None]
         participants = {r["resp"]["participant_code"] for r in rows} | {t["participant_code"] for t in test_results}
+        # Қатемен жұмыс: бастапқы және соңғы талпыныстағы ЖИ бағасының өсімі
+        by_root = {}
+        for r in rows:
+            by_root.setdefault(r["root_id"], []).append(r)
+        gains = []
+        for items in by_root.values():
+            items.sort(key=lambda r: r["attempt"])
+            if len(items) > 1 and items[0]["ai_score"] is not None and items[-1]["ai_score"] is not None:
+                gains.append(items[-1]["ai_score"] - items[0]["ai_score"])
         return {
+            "revised_tasks": sum(1 for items in by_root.values() if len(items) > 1),
+            "mean_gain": round(sum(gains) / len(gains), 2) if gains else None,
+            "hints": len(store.list("hints")),
             "participants": len(participants),
             "responses": total,
             "tests": len(test_results),
@@ -482,7 +656,9 @@ def create_app(store=None):
                 flash("Педагог тексеруі сақталды.", "success")
                 return redirect(url_for("review", response_id=response_id))
 
-        return render_template("review.html", resp=resp, task=task_def, ai=ai, review=existing)
+        attempts = [dict(a, ai_score=ai_score(a["response_id"])) for a in task_attempts(root_of(resp))]
+        return render_template("review.html", resp=resp, task=task_def, ai=ai, review=existing,
+                               attempts=attempts, hints=task_hints(root_of(resp)))
 
     def local_time(value):
         """ISO (UTC) уақытын Алматы уақытына (UTC+5) айналдырады: 2026-10-15 16:52:36."""
@@ -498,7 +674,8 @@ def create_app(store=None):
 
     def responses_table():
         header = [
-            "response_id", "participant_code", "task_id", "task_version", "submitted_at_kz", "answer_text",
+            "response_id", "root_id", "attempt", "hints_for_task", "participant_code", "task_id", "task_version",
+            "submitted_at_kz", "answer_text",
             "ai_status", "ai_model", "prompt_version", "ai_suggested_score", "max_score", "ai_strengths",
             "ai_errors", "ai_recommendation", "ai_needs_review", "teacher_status", "teacher_score",
             "score_diff_teacher_minus_ai", "teacher_comment", "corrected_feedback", "diff_reason", "reviewed_at_kz",
@@ -507,8 +684,8 @@ def create_app(store=None):
         for r in collect_rows():
             resp, ai, rev = r["resp"], r["ai"] or {}, r["review"] or {}
             out.append([
-                resp["response_id"], resp["participant_code"], resp["task_id"], resp.get("task_version"),
-                local_time(resp["submitted_at"]), resp["answer_text"], resp.get("ai_status"), ai.get("model", ""),
+                resp["response_id"], r["root_id"], r["attempt"], r["hints"], resp["participant_code"],
+                resp["task_id"], resp.get("task_version"), local_time(resp["submitted_at"]), resp["answer_text"], resp.get("ai_status"), ai.get("model", ""),
                 ai.get("prompt_version", ""), r["ai_score"] if r["ai_score"] is not None else "",
                 r["task"].get("max_score", ""), " | ".join(ai.get("strengths", [])),
                 " | ".join(ai.get("errors", [])), ai.get("recommendation", ""),
@@ -531,6 +708,16 @@ def create_app(store=None):
                 [t["participant_code"], t["test_version"], local_time(t["submitted_at"]), t["score"], t["max_score"]]
                 + [int(by_id[q]["correct"]) if q in by_id else "" for q in qids]
             )
+        return header, out
+
+    def hints_table():
+        header = ["hint_id", "root_id", "response_id", "attempt", "participant_code", "task_id", "n",
+                  "question", "hint", "model", "prompt_version", "created_at_kz"]
+        out = []
+        for h in sorted(store.list("hints"), key=lambda h: h["created_at"]):
+            out.append([h["hint_id"], h["root_id"], h["response_id"], h["attempt"], h["participant_code"],
+                        h["task_id"], h["n"], h.get("question", ""), h["hint"], h.get("model", ""),
+                        h.get("prompt_version", ""), local_time(h["created_at"])])
         return header, out
 
     def csv_response(filename, header, rows):
@@ -562,7 +749,7 @@ def create_app(store=None):
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
         long_text = {"answer_text", "ai_strengths", "ai_errors", "ai_recommendation", "teacher_comment",
-                     "corrected_feedback", "diff_reason"}
+                     "corrected_feedback", "diff_reason", "question", "hint"}
         for idx, name in enumerate(header, start=1):
             letter = ws.cell(row=1, column=idx).column_letter
             if name in long_text:
@@ -583,7 +770,8 @@ def create_app(store=None):
     @app.route("/researcher/export/<name>.<fmt>")
     @researcher_required
     def export(name, fmt):
-        tables = {"responses": ("Жауаптар", responses_table), "tests": ("Тест нәтижелері", tests_table)}
+        tables = {"responses": ("Жауаптар", responses_table), "tests": ("Тест нәтижелері", tests_table),
+                  "hints": ("ЖИ кеңестері", hints_table)}
         if name not in tables or fmt not in ("csv", "xlsx"):
             abort(404)
         title, build = tables[name]
