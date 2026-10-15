@@ -124,7 +124,7 @@ def create_app(store=None):
         @wraps(view)
         def wrapper(*args, **kwargs):
             if not session.get("researcher"):
-                if request.path.endswith(".csv"):
+                if request.path.endswith((".csv", ".xlsx")):
                     abort(403)
                 flash("Бұл бет тек зерттеушіге қолжетімді. Құпиясөзді енгізіңіз.", "warning")
                 return redirect(url_for("researcher_login", next=request.path))
@@ -484,58 +484,113 @@ def create_app(store=None):
 
         return render_template("review.html", resp=resp, task=task_def, ai=ai, review=existing)
 
-    def csv_response(filename, header, rows):
-        buf = io.StringIO()
-        buf.write("﻿")  # Excel қазақ әріптерін дұрыс ашуы үшін
-        writer = csv.writer(buf)
-        writer.writerow(header)
-        writer.writerows(rows)
-        return Response(
-            buf.getvalue(),
-            mimetype="text/csv; charset=utf-8",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
-        )
+    def local_time(value):
+        """ISO (UTC) уақытын Алматы уақытына (UTC+5) айналдырады: 2026-10-15 16:52:36."""
+        if not value:
+            return ""
+        try:
+            return datetime.fromisoformat(value).astimezone(KZ_TZ).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return value
 
-    @app.route("/researcher/export/responses.csv")
-    @researcher_required
-    def export_responses():
+    def flag(value):
+        return "" if value in ("", None) else int(bool(value))
+
+    def responses_table():
         header = [
-            "response_id", "participant_code", "task_id", "task_version", "submitted_at", "answer_text",
+            "response_id", "participant_code", "task_id", "task_version", "submitted_at_kz", "answer_text",
             "ai_status", "ai_model", "prompt_version", "ai_suggested_score", "max_score", "ai_strengths",
             "ai_errors", "ai_recommendation", "ai_needs_review", "teacher_status", "teacher_score",
-            "score_diff_teacher_minus_ai", "teacher_comment", "corrected_feedback", "diff_reason", "reviewed_at",
+            "score_diff_teacher_minus_ai", "teacher_comment", "corrected_feedback", "diff_reason", "reviewed_at_kz",
         ]
         out = []
         for r in collect_rows():
             resp, ai, rev = r["resp"], r["ai"] or {}, r["review"] or {}
             out.append([
                 resp["response_id"], resp["participant_code"], resp["task_id"], resp.get("task_version"),
-                resp["submitted_at"], resp["answer_text"], resp.get("ai_status"), ai.get("model", ""),
+                local_time(resp["submitted_at"]), resp["answer_text"], resp.get("ai_status"), ai.get("model", ""),
                 ai.get("prompt_version", ""), r["ai_score"] if r["ai_score"] is not None else "",
                 r["task"].get("max_score", ""), " | ".join(ai.get("strengths", [])),
                 " | ".join(ai.get("errors", [])), ai.get("recommendation", ""),
-                ai.get("needs_review", ""), rev.get("status", "not_reviewed"),
+                flag(ai.get("needs_review", "")), rev.get("status", "not_reviewed"),
                 r["teacher_score"] if r["teacher_score"] is not None else "",
                 r["diff"] if r["diff"] is not None else "", rev.get("teacher_comment", ""),
-                rev.get("corrected_feedback", ""), rev.get("diff_reason", ""), rev.get("reviewed_at", ""),
+                rev.get("corrected_feedback", ""), rev.get("diff_reason", ""), local_time(rev.get("reviewed_at", "")),
             ])
-        return csv_response("responses.csv", header, out)
+        return header, out
 
-    @app.route("/researcher/export/tests.csv")
-    @researcher_required
-    def export_tests():
+    def tests_table():
         test_def = store.get("tasks", TEST_ID)
         qids = [q["id"] for q in test_def["questions"]]
-        header = ["participant_code", "test_version", "submitted_at", "score", "max_score"]
+        header = ["participant_code", "test_version", "submitted_at_kz", "score", "max_score"]
         header += [f"{q}_correct" for q in qids]
         out = []
         for t in sorted(store.list("test_results"), key=lambda t: t["submitted_at"]):
             by_id = {a["id"]: a for a in t["answers"]}
             out.append(
-                [t["participant_code"], t["test_version"], t["submitted_at"], t["score"], t["max_score"]]
+                [t["participant_code"], t["test_version"], local_time(t["submitted_at"]), t["score"], t["max_score"]]
                 + [int(by_id[q]["correct"]) if q in by_id else "" for q in qids]
             )
-        return csv_response("test_results.csv", header, out)
+        return header, out
+
+    def csv_response(filename, header, rows):
+        # Орыс/қазақ тіліндегі Excel «;» бөлгішін күтеді; BOM қазақ әріптерінің дұрыс ашылуы үшін
+        buf = io.StringIO()
+        buf.write("﻿")
+        writer = csv.writer(buf, delimiter=";", lineterminator="\r\n")
+        writer.writerow(header)
+        writer.writerows(rows)
+        return Response(
+            buf.getvalue().encode("utf-8"),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    def xlsx_response(filename, sheet_title, header, rows):
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = sheet_title
+        ws.append(header)
+        for row in rows:
+            ws.append(row)
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill("solid", fgColor="DCE3F0")
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = ws.dimensions
+        long_text = {"answer_text", "ai_strengths", "ai_errors", "ai_recommendation", "teacher_comment",
+                     "corrected_feedback", "diff_reason"}
+        for idx, name in enumerate(header, start=1):
+            letter = ws.cell(row=1, column=idx).column_letter
+            if name in long_text:
+                ws.column_dimensions[letter].width = 50
+                for cell in ws[letter][1:]:
+                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+            else:
+                width = max(len(str(c.value or "")) for c in ws[letter])
+                ws.column_dimensions[letter].width = min(max(width + 2, 8), 28)
+        buf = io.BytesIO()
+        wb.save(buf)
+        return Response(
+            buf.getvalue(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    @app.route("/researcher/export/<name>.<fmt>")
+    @researcher_required
+    def export(name, fmt):
+        tables = {"responses": ("Жауаптар", responses_table), "tests": ("Тест нәтижелері", tests_table)}
+        if name not in tables or fmt not in ("csv", "xlsx"):
+            abort(404)
+        title, build = tables[name]
+        header, rows = build()
+        if fmt == "csv":
+            return csv_response(f"{name}.csv", header, rows)
+        return xlsx_response(f"{name}.xlsx", title, header, rows)
 
     @app.errorhandler(403)
     def forbidden(_):

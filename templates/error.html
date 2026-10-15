@@ -1,8 +1,10 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
 {% block content %}
-<section class="card narrow">
-  <h1>{{ code }}</h1>
-  <p>{{ message }}</p>
-  <a class="btn" href="{{ url_for('index') }}">Басты бетке</a>
-</section>
+<div class="card narrow stack-lg center">
+  <div>{{ tile("lock" if code == 403 else "alert", "red", 24) }}</div>
+  <h1 style="margin:0">{{ code }}</h1>
+  <p class="muted">{{ message }}</p>
+  <a class="btn" href="{{ url_for('index') }}">{{ icon("home", 18) }} Басты бетке</a>
+</div>
 {% endblock %}

@@ -1,40 +1,57 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
 {% block title %}Тапсырмалар — JS-Тәлімгер{% endblock %}
 {% block content %}
-<h1>Тапсырмалар</h1>
+{% set TASK_ICONS = {"P1": ("braces", "amber"), "P2": ("trending", "green"), "P3": ("pointer", "violet")} %}
+{% set done = (1 if test_result else 0) + responses|length %}
+{% set total = 1 + tasks|length %}
 
-<section class="card row-between">
-  <div>
-    <h2>1. Диагностикалық тест</h2>
+<div class="row-between">
+  <h1>Тапсырмалар</h1>
+  <span class="badge {{ 'ok' if done == total else '' }}">{{ icon("check", 14) }} {{ done }} / {{ total }} орындалды</span>
+</div>
+<div class="progress" style="margin:4px 0 22px"><span style="width: {{ (100 * done / total)|round|int }}%"></span></div>
+
+<div class="stack-lg">
+  <div class="card task-card {{ 'done' if test_result }}">
+    {{ tile("clipboard", "blue") }}
+    <div class="body">
+      <h3>Диагностикалық тест</h3>
+      <div class="meta">
+        <span>{{ icon("list", 15) }} 10 сұрақ</span>
+        <span>{{ icon("clock", 15) }} ~10 мин</span>
+        {% if test_result %}<span class="badge ok">{{ icon("check", 14) }} {{ test_result.score }} / {{ test_result.max_score }}</span>{% endif %}
+      </div>
+    </div>
     {% if test_result %}
-      <p>Орындалды: <b>{{ test_result.score }} / {{ test_result.max_score }}</b></p>
+      <a class="btn btn-ghost" href="{{ url_for('test_result') }}">{{ icon("eye", 18) }} Нәтиже</a>
     {% else %}
-      <p class="muted">10 сұрақ, JavaScript негіздері</p>
+      <a class="btn" href="{{ url_for('test') }}">Бастау {{ icon("arrow-right", 18) }}</a>
     {% endif %}
   </div>
-  {% if test_result %}
-    <a class="btn btn-ghost" href="{{ url_for('test_result') }}">Нәтижені қарау</a>
-  {% else %}
-    <a class="btn" href="{{ url_for('test') }}">Тестті бастау</a>
-  {% endif %}
-</section>
 
-<h2>2. Практикалық тапсырмалар</h2>
-{% for t in tasks %}
-  {% set r = responses.get(t.task_id) %}
-  <section class="card row-between">
-    <div>
-      <h3>{{ t.task_id }}. {{ t.title }}</h3>
-      <p class="muted small">Өлшенетін дағды: {{ t.skill }} · ең жоғары балл: {{ t.max_score }}</p>
+  {% for t in tasks %}
+    {% set r = responses.get(t.task_id) %}
+    {% set ic = TASK_ICONS.get(t.task_id, ("code", "blue")) %}
+    <div class="card task-card {{ 'done' if r }}">
+      {{ tile(ic[0], ic[1]) }}
+      <div class="body">
+        <h3>{{ t.task_id }} · {{ t.title }}</h3>
+        <div class="meta">
+          <span>{{ icon("target", 15) }} {{ t.skill }}</span>
+          <span>{{ icon("chart", 15) }} {{ t.max_score }} балл</span>
+          {% if r %}
+            <span class="badge {{ 'ok' if r.ai_status == 'done' else 'warn' }}">
+              {{ icon("check" if r.ai_status == 'done' else "clock", 14) }} {{ AI_STATUS_LABELS[r.ai_status] }}</span>
+          {% endif %}
+        </div>
+      </div>
       {% if r %}
-        <span class="badge {{ 'ok' if r.ai_status == 'done' else 'warn' }}">Жауап сақталды · {{ AI_STATUS_LABELS[r.ai_status] }}</span>
+        <a class="btn btn-ghost" href="{{ url_for('feedback', response_id=r.response_id) }}">{{ icon("sparkles", 18) }} Кері байланыс</a>
+      {% else %}
+        <a class="btn" href="{{ url_for('task', task_id=t.task_id) }}">Орындау {{ icon("arrow-right", 18) }}</a>
       {% endif %}
     </div>
-    {% if r %}
-      <a class="btn btn-ghost" href="{{ url_for('feedback', response_id=r.response_id) }}">Кері байланыс</a>
-    {% else %}
-      <a class="btn" href="{{ url_for('task', task_id=t.task_id) }}">Орындау</a>
-    {% endif %}
-  </section>
-{% endfor %}
+  {% endfor %}
+</div>
 {% endblock %}

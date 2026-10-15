@@ -1,66 +1,82 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
 {% block title %}Тексеру {{ resp.response_id }} — JS-Тәлімгер{% endblock %}
 {% block content %}
-<a class="small" href="{{ url_for('researcher') }}">← Зерттеуші беті</a>
-<h1>Жауапты тексеру <code>{{ resp.response_id }}</code></h1>
-<p class="muted small">Қатысушы: <b>{{ resp.participant_code }}</b> · Тапсырма: <b>{{ task.task_id }} (v{{ resp.task_version }}) — {{ task.title }}</b> ·
-  Жіберілді: {{ resp.submitted_at|kz_time }} · ЖИ сұраныс саны: {{ resp.ai_attempts or 0 }}</p>
+<a class="back" href="{{ url_for('researcher') }}">{{ icon("arrow-left", 16) }} Зерттеуші беті</a>
+<h1>Жауапты тексеру</h1>
+<div class="meta" style="margin-bottom:18px">
+  <span>{{ icon("hash", 15) }} {{ resp.response_id }}</span>
+  <span>{{ icon("user", 15) }} {{ resp.participant_code }}</span>
+  <span>{{ icon("code", 15) }} {{ task.task_id }} (v{{ resp.task_version }}) · {{ task.title }}</span>
+  <span>{{ icon("clock", 15) }} {{ resp.submitted_at|kz_time }}</span>
+  <span>{{ icon("refresh", 15) }} ЖИ сұраныс: {{ resp.ai_attempts or 0 }}</span>
+</div>
 
-<div class="grid-2">
-  <section class="card">
-    <h2>1. Бастапқы жауап</h2>
+<div class="grid grid-2" style="align-items:start">
+  <div class="card stack-lg">
+    <p class="section-title" style="margin:0">{{ icon("code", 16) }} 1 · Бастапқы жауап</p>
     <pre class="code">{{ resp.answer_text }}</pre>
     <details>
-      <summary>Тапсырма мен рубрика</summary>
+      <summary>{{ icon("file", 16) }} Тапсырма, рубрика, күтілетін жауап</summary>
       <pre class="task-text">{{ task.text }}</pre>
-      <ul>{% for c in task.criteria %}<li>{{ c.name }} — 0–{{ c.max }}</li>{% endfor %}</ul>
-      <p class="small"><b>Күтілетін жауап:</b></p>
-      <pre class="code">{{ task.expected_answer }}</pre>
+      {% for c in task.criteria %}
+        <div class="result-row small"><span class="qnum">{{ loop.index }}</span><span class="label">{{ c.name }}</span><span class="badge">0–{{ c.max }}</span></div>
+      {% endfor %}
+      <pre class="code" style="margin-top:10px">{{ task.expected_answer }}</pre>
     </details>
-  </section>
+  </div>
 
-  <section class="card">
-    <h2>2. ЖИ талдауы</h2>
-    <p><span class="badge {{ 'ok' if resp.ai_status == 'done' else 'warn' }}">{{ AI_STATUS_LABELS[resp.ai_status] }}</span></p>
-    {% if resp.ai_error %}<p class="muted small">Ескерту: {{ resp.ai_error }}</p>{% endif %}
+  <div class="card stack-lg">
+    <div class="row-between">
+      <p class="section-title" style="margin:0">{{ icon("sparkles", 16) }} 2 · ЖИ талдауы</p>
+      <span class="badge {{ 'ok' if resp.ai_status == 'done' else 'warn' }}">{{ AI_STATUS_LABELS[resp.ai_status] }}</span>
+    </div>
+    {% if resp.ai_error %}<p class="hint">{{ icon("alert", 14) }} {{ resp.ai_error }}</p>{% endif %}
     {% if ai %}
-      <p class="small muted">Модель: {{ ai.model }} · сұраныс нұсқасы: {{ ai.prompt_version }} · {{ ai.created_at|kz_time }}</p>
-      <p>Ұсынылған балл: <b>{{ ai.suggested_score if ai.suggested_score is not none else '—' }} / {{ task.max_score }}</b>
-        {% if ai.needs_review %}<span class="badge warn">ЖИ педагог тексеруін сұрайды</span>{% endif %}</p>
-      {% if ai.criteria_scores %}
-        <table class="table">
-          <thead><tr><th>Критерий</th><th>Балл</th><th>Түсініктеме</th></tr></thead>
-          <tbody>{% for c in ai.criteria_scores %}<tr><td>{{ c.criterion }}</td><td>{{ c.score }}/{{ c.max }}</td><td>{{ c.comment }}</td></tr>{% endfor %}</tbody>
-        </table>
-      {% endif %}
-      <p><b>Дұрыс тұстары:</b></p><ul>{% for s in ai.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
-      <p><b>Қателер:</b></p><ul>{% for e in ai.errors %}<li>{{ e }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
-      <p><b>Ұсыныс:</b></p><p class="pre">{{ ai.recommendation or '—' }}</p>
+      <div class="fb-head">
+        {% if ai.suggested_score is not none %}
+        <div class="score-ring" style="--p: {{ (100 * ai.suggested_score / task.max_score)|round|int }}">
+          <div><b>{{ ai.suggested_score }}/{{ task.max_score }}</b><span>ЖИ бағасы</span></div>
+        </div>
+        {% endif %}
+        <div class="small muted">
+          <div>{{ icon("sparkles", 14) }} {{ ai.model }} · {{ ai.prompt_version }}</div>
+          <div>{{ icon("clock", 14) }} {{ ai.created_at|kz_time }}</div>
+          {% if ai.needs_review %}<span class="badge warn" style="margin-top:6px">{{ icon("alert", 14) }} ЖИ тексеруді сұрайды</span>{% endif %}
+        </div>
+      </div>
+      {% for c in ai.criteria_scores %}
+        <div class="result-row small"><span class="qnum">{{ loop.index }}</span>
+          <span class="label">{{ c.criterion }}{% if c.comment %}<br><span class="muted">{{ c.comment }}</span>{% endif %}</span>
+          <span class="badge {{ 'ok' if c.score == c.max else ('bad' if c.score == 0 else 'warn') }}">{{ c.score }}/{{ c.max }}</span></div>
+      {% endfor %}
+      {% if ai.strengths %}<div class="fb-block">{{ tile("check", "green", 18) }}<ul>{% for s in ai.strengths %}<li>{{ s }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if ai.errors %}<div class="fb-block">{{ tile("alert", "amber", 18) }}<ul>{% for e in ai.errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if ai.recommendation %}<div class="fb-block">{{ tile("bulb", "blue", 18) }}<p class="pre">{{ ai.recommendation }}</p></div>{% endif %}
       {% if not ai.valid %}
-        <details><summary>ЖИ-дің бастапқы жауабы (құрылымы бұзылған)</summary><pre class="code">{{ ai.raw_text }}</pre></details>
+        <details><summary>{{ icon("eye", 16) }} ЖИ-дің бастапқы жауабы (құрылымы бұзылған)</summary><pre class="code">{{ ai.raw_text }}</pre></details>
       {% endif %}
     {% endif %}
     {% if resp.ai_status != 'done' %}
       <form method="post" action="{{ url_for('retry_feedback', response_id=resp.response_id) }}" data-submit-once>
         <input type="hidden" name="back" value="review">
-        <button class="btn btn-ghost" type="submit" data-loading="Сұрау жіберілуде…">ЖИ талдауын қайта сұрау</button>
+        <button class="btn btn-ghost" type="submit" data-loading="Сұрау жіберілуде…">{{ icon("refresh", 18) }} ЖИ талдауын қайта сұрау</button>
       </form>
     {% endif %}
-  </section>
+  </div>
 </div>
 
-<section class="card">
-  <h2>3. Педагог тексеруі</h2>
-  <p class="muted small">ЖИ нәтижесі өзгертілмейді: педагог бағасы мен түзетуі бөлек сақталады.</p>
+<div class="card section">
+  <p class="section-title">{{ icon("teacher", 16) }} 3 · Педагог тексеруі <span class="hint" style="text-transform:none;letter-spacing:0">— ЖИ нәтижесі өзгермейді, бөлек сақталады</span></p>
   <form method="post" class="stack">
-    <div class="grid-2">
+    <div class="grid grid-2">
       <div class="stack">
         <label for="teacher_score">Педагог бағасы (0–{{ task.max_score }})</label>
         <input id="teacher_score" name="teacher_score" type="number" min="0" max="{{ task.max_score }}"
                value="{{ review.teacher_score if review and review.teacher_score is not none else '' }}">
       </div>
       <div class="stack">
-        <label for="status">Тексеру мәртебесі</label>
+        <label for="status">Мәртебе</label>
         <select id="status" name="status">
           {% for value, label in REVIEW_STATUS_LABELS.items() %}
             <option value="{{ value }}" {% if (review.status if review else 'not_reviewed') == value %}selected{% endif %}>{{ label }}</option>
@@ -68,14 +84,22 @@
         </select>
       </div>
     </div>
-    <label for="corrected_feedback">Түзетілген кері байланыс (қатысушыға көрсетіледі)</label>
-    <textarea id="corrected_feedback" name="corrected_feedback" rows="5">{{ review.corrected_feedback if review else '' }}</textarea>
-    <label for="teacher_comment">Педагог түсініктемесі (қатысушыға көрсетіледі)</label>
-    <textarea id="teacher_comment" name="teacher_comment" rows="3">{{ review.teacher_comment if review else '' }}</textarea>
-    <label for="diff_reason">ЖИ мен педагог бағасының айырмашылық себебі (тек зерттеу үшін)</label>
-    <textarea id="diff_reason" name="diff_reason" rows="3">{{ review.diff_reason if review else '' }}</textarea>
-    <button class="btn" type="submit">Тексеруді сақтау</button>
-    {% if review %}<p class="muted small">Соңғы сақталған уақыт: {{ review.reviewed_at|kz_time }}</p>{% endif %}
+    <label for="corrected_feedback">Түзетілген кері байланыс <span class="hint">— қатысушыға көрінеді</span></label>
+    <textarea id="corrected_feedback" name="corrected_feedback" rows="4">{{ review.corrected_feedback if review else '' }}</textarea>
+    <div class="grid grid-2">
+      <div class="stack">
+        <label for="teacher_comment">Түсініктеме <span class="hint">— қатысушыға көрінеді</span></label>
+        <textarea id="teacher_comment" name="teacher_comment" rows="3">{{ review.teacher_comment if review else '' }}</textarea>
+      </div>
+      <div class="stack">
+        <label for="diff_reason">Айырмашылық себебі <span class="hint">— тек зерттеу үшін</span></label>
+        <textarea id="diff_reason" name="diff_reason" rows="3">{{ review.diff_reason if review else '' }}</textarea>
+      </div>
+    </div>
+    <div class="row-between">
+      <button class="btn" type="submit">{{ icon("check", 18) }} Тексеруді сақтау</button>
+      {% if review %}<span class="hint">{{ icon("clock", 14) }} {{ review.reviewed_at|kz_time }}</span>{% endif %}
+    </div>
   </form>
-</section>
+</div>
 {% endblock %}

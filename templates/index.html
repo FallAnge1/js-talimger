@@ -1,58 +1,69 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
 {% block content %}
 <section class="hero">
-  <h1>JavaScript тілін үйренуге арналған ЖИ кері байланысы бар диагностика</h1>
-  <p class="lead">Бұл қосымша магистрлік диссертациялық зерттеу аясында әзірленген. Мақсаты — JavaScript негіздерін
-    үйренушілердің жиі жіберетін қателерін анықтау және жасанды интеллект (ЖИ) берген кері байланыстың педагог
-    бағасымен қаншалықты сәйкес келетінін зерттеу.</p>
+  <div>
+    <span class="eyebrow">{{ icon("teacher", 15) }} Магистрлік зерттеу · анонимді · ~30 мин</span>
+    <h1>JavaScript диагностикасы және ЖИ кері байланысы</h1>
+    <p class="lead">Тест пен тапсырмаларды орындаңыз — ЖИ кодыңызды талдап, қатені және келесі қадамды көрсетеді.</p>
+    <div class="chips">
+      <span class="chip">{{ icon("clipboard", 16) }} 10 сұрақ</span>
+      <span class="chip">{{ icon("code", 16) }} {{ tasks|length }} практикалық тапсырма</span>
+      <span class="chip">{{ icon("sparkles", 16) }} ЖИ талдауы</span>
+      <span class="chip">{{ icon("teacher", 16) }} Педагог тексереді</span>
+    </div>
+  </div>
+
+  <div class="card start-card">
+    {% if participant %}
+      <h2>{{ tile("user", "blue", 20) }} Қош келдіңіз, {{ participant }}</h2>
+      <p class="muted">Тапсырмаларды жалғастыра аласыз.</p>
+      <a class="btn btn-block" href="{{ url_for('tasks') }}">Жалғастыру {{ icon("arrow-right", 18) }}</a>
+    {% else %}
+      <h2>{{ tile("hash", "blue", 20) }} Бастау</h2>
+      <form method="post" action="{{ url_for('start') }}" class="stack">
+        <label for="participant_code">Анонимді қатысушы коды
+          <span class="hint">— латын әріптері, сандар, «-», 3–20 таңба</span></label>
+        <div class="input-icon">
+          {{ icon("user", 18) }}
+          <input id="participant_code" name="participant_code" required minlength="3" maxlength="20"
+                 pattern="[A-Za-z0-9_\-]{3,20}" placeholder="JS-017" autocomplete="off">
+        </div>
+        <label class="check"><input type="checkbox" name="consent" value="1" required>
+          <span>Зерттеу шарттарымен таныстым, қатысуға келісемін</span></label>
+        <button class="btn btn-block" type="submit">Зерттеуге қатысу {{ icon("arrow-right", 18) }}</button>
+        <p class="hint">Кодты сақтап қойыңыз — кері байланысқа осы кодпен ораласыз.</p>
+      </form>
+    {% endif %}
+  </div>
 </section>
 
-<div class="grid-2">
-  <section class="card">
-    <h2>Қатысу тәртібі</h2>
-    <ol>
-      <li>Өзіңізге берілген немесе өзіңіз ойлап тапқан <b>анонимді қатысушы кодын</b> енгізіңіз (мысалы, <code>JS-017</code>). Атыңызды жазбаңыз.</li>
-      <li>JavaScript негіздері бойынша <b>10 сұрақтан тұратын тестті</b> орындаңыз.</li>
-      <li><b>{{ tasks|length }} практикалық тапсырманы</b> орындаңыз: код жазып, шешіміңізді қысқаша түсіндіріңіз.</li>
-      <li>Әр тапсырмадан кейін ЖИ дайындаған <b>кері байланысты</b> оқыңыз.</li>
-    </ol>
-    <p class="muted small">Барлығы шамамен 30–40 минут алады. Әр тапсырмаға бір рет жауап беріледі.</p>
-  </section>
+<section class="section">
+  <p class="section-title">{{ icon("list", 16) }} Қалай өтеді</p>
+  <div class="grid grid-4">
+    <div class="card step">{{ tile("hash", "blue") }}<span class="step-num">1-ҚАДАМ</span><h3>Код енгізу</h3><p>Атыңызды емес, анонимді кодты</p></div>
+    <div class="card step">{{ tile("clipboard", "violet") }}<span class="step-num">2-ҚАДАМ</span><h3>Тест</h3><p>JS негіздері, 10 сұрақ</p></div>
+    <div class="card step">{{ tile("code", "amber") }}<span class="step-num">3-ҚАДАМ</span><h3>Тапсырмалар</h3><p>Код + 2–3 сөйлем түсіндірме</p></div>
+    <div class="card step">{{ tile("sparkles", "green") }}<span class="step-num">4-ҚАДАМ</span><h3>Кері байланыс</h3><p>Дұрыс тұстар, қателер, кеңес</p></div>
+  </div>
+</section>
 
-  <section class="card">
-    <h2>Қандай деректер жиналады</h2>
-    <ul>
-      <li>анонимді қатысушы коды;</li>
-      <li>тест жауаптары және практикалық тапсырмаларға жазған код пен түсіндірме;</li>
-      <li>жауап жіберілген уақыт;</li>
-      <li>ЖИ талдауы және педагогтің тексеру нәтижесі.</li>
-    </ul>
-    <div class="note">
-      <b>Назар аударыңыз:</b> практикалық тапсырмаларға берген жауабыңыз талдау үшін сыртқы ЖИ сервисіне
-      (Google Gemini) жіберіледі. Сондықтан жауапқа аты-жөніңізді, телефоныңызды немесе басқа жеке
-      мәліметтерді жазбаңыз. ЖИ кері байланысы — ұсыныс қана, оны педагог тексеріп, түзетуі мүмкін.
-    </div>
-    <p class="muted small">Деректер бұлттық деректер қорында сақталады және тек зерттеу мақсатында
-      анонимді түрде пайдаланылады. Қатысу ерікті.</p>
-  </section>
-</div>
+<section class="section">
+  <p class="section-title">{{ icon("database", 16) }} Не сақталады</p>
+  <div class="chips" style="margin-top:0">
+    <span class="chip">{{ icon("hash", 16) }} Анонимді код</span>
+    <span class="chip">{{ icon("clipboard", 16) }} Тест жауаптары</span>
+    <span class="chip">{{ icon("code", 16) }} Код пен түсіндірме</span>
+    <span class="chip">{{ icon("clock", 16) }} Жіберілген уақыт</span>
+    <span class="chip">{{ icon("sparkles", 16) }} ЖИ мен педагог бағасы</span>
+  </div>
+</section>
 
-<section class="card start-card">
-  {% if participant %}
-    <p>Сіз <b>{{ participant }}</b> кодымен кірдіңіз.</p>
-    <a class="btn" href="{{ url_for('tasks') }}">Жалғастыру</a>
-  {% else %}
-    <h2>Бастау</h2>
-    <form method="post" action="{{ url_for('start') }}" class="stack">
-      <label for="participant_code">Анонимді қатысушы коды</label>
-      <input id="participant_code" name="participant_code" required minlength="3" maxlength="20"
-             pattern="[A-Za-z0-9_\-]{3,20}" placeholder="мысалы, JS-017" autocomplete="off">
-      <span class="muted small">Латын әріптері, сандар, «-» немесе «_», 3–20 таңба. Кодты есте сақтаңыз —
-        кері байланысқа кейін осы кодпен оралуға болады.</span>
-      <label class="check"><input type="checkbox" name="consent" value="1" required>
-        Зерттеудің мақсатымен және деректер өңделу тәртібімен таныстым, қатысуға келісемін.</label>
-      <button class="btn" type="submit">Зерттеуге қатысу</button>
-    </form>
-  {% endif %}
+<section class="section">
+  <div class="notice">
+    {{ tile("shield", "amber", 20) }}
+    <p><b>Жауабыңыз талдау үшін Google Gemini-ге жіберіледі.</b> Аты-жөніңізді, телефоныңызды жазбаңыз.
+      ЖИ бағасы — ұсыныс қана, оны педагог тексереді. Қатысу ерікті, деректер анонимді.</p>
+  </div>
 </section>
 {% endblock %}

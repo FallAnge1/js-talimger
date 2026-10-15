@@ -1,17 +1,18 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
 {% block title %}Зерттеушіге кіру — JS-Тәлімгер{% endblock %}
 {% block content %}
-<section class="card narrow">
-  <h1>Зерттеуші беті</h1>
+<div class="card narrow stack-lg center">
+  <div>{{ tile("lock", "blue", 24) }}</div>
+  <h1 style="margin:0">Зерттеуші беті</h1>
   {% if configured %}
-    <p class="muted">Бұл бет тек зерттеушіге арналған. Құпиясөзді енгізіңіз.</p>
-    <form method="post" class="stack">
+    <form method="post" class="stack" style="text-align:left">
       <label for="password">Құпиясөз</label>
       <input id="password" type="password" name="password" required autocomplete="current-password">
-      <button class="btn" type="submit">Кіру</button>
+      <button class="btn btn-block" type="submit">Кіру {{ icon("arrow-right", 18) }}</button>
     </form>
   {% else %}
-    <div class="flash flash-warning">Зерттеушіге кіру өшірулі: серверде RESEARCHER_PASSWORD орта айнымалысы бапталмаған.</div>
+    <div class="flash flash-warning">{{ icon("alert", 18) }}<span>RESEARCHER_PASSWORD бапталмаған — кіру өшірулі.</span></div>
   {% endif %}
-</section>
+</div>
 {% endblock %}

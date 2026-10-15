@@ -141,6 +141,7 @@ def test_non_json_ai_reply_marked_invalid(client, app, ai_calls):
 def test_researcher_pages_require_login(client):
     assert client.get("/researcher").status_code == 302
     assert client.get("/researcher/export/responses.csv").status_code == 403
+    assert client.get("/researcher/export/responses.xlsx").status_code == 403
     client.post("/researcher/login", data={"password": "wrong"})
     assert client.get("/researcher").status_code == 302
 
@@ -165,9 +166,27 @@ def test_teacher_review_stored_separately_and_exported(client, app, ai_calls):
     assert app.store.get("ai_feedback", rid)["suggested_score"] == 8  # ЖИ нәтижесі өзгермеді
     assert app.store.get("teacher_review", rid)["teacher_score"] == 6
 
+    # CSV: Excel (орыс/қазақ локалі) үшін «;» бөлгіші, BOM, бір жауап — бір жол
+    import csv
+    import io
+
     csv_text = client.get("/researcher/export/responses.csv").get_data(as_text=True)
-    assert csv_text.startswith("﻿response_id,")
-    assert rid in csv_text and "Түсіндірме толық емес" in csv_text and ",-2," in csv_text
+    assert csv_text.startswith("﻿response_id;")
+    rows = list(csv.reader(io.StringIO(csv_text.lstrip("﻿")), delimiter=";"))
+    header, row = rows[0], rows[1]
+    assert len(rows) == 2 and len(row) == len(header)
+    data = dict(zip(header, row))
+    assert data["response_id"] == rid and data["answer_text"] == GOOD_ANSWER
+    assert data["score_diff_teacher_minus_ai"] == "-2" and data["diff_reason"] == "Түсіндірме толық емес"
+    assert "T" not in data["submitted_at_kz"]  # оқуға ыңғайлы уақыт
+
+    # Excel файлы
+    from openpyxl import load_workbook
+
+    resp = client.get("/researcher/export/responses.xlsx")
+    assert resp.status_code == 200
+    ws = load_workbook(io.BytesIO(resp.data)).active
+    assert ws["A1"].value == "response_id" and ws["A2"].value == rid
 
 
 def test_teacher_score_out_of_range_rejected(client, app, ai_calls):

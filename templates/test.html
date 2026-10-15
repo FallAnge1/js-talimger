@@ -1,22 +1,31 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
 {% block title %}Тест — JS-Тәлімгер{% endblock %}
 {% block content %}
-<h1>{{ test.title }}</h1>
-<p class="muted">Әр сұраққа бір дұрыс жауапты таңдаңыз. Тестті бір рет тапсыруға болады.</p>
+<a class="back" href="{{ url_for('tasks') }}">{{ icon("arrow-left", 16) }} Тапсырмалар</a>
+<div class="row" style="margin-top:8px">
+  {{ tile("clipboard", "blue") }}
+  <div>
+    <h1 style="margin:0">Диагностикалық тест</h1>
+    <p class="muted small" style="margin:0">Әр сұраққа бір жауап · бір рет тапсырылады</p>
+  </div>
+</div>
 
-<form method="post" class="stack" data-submit-once>
+<form method="post" class="stack" style="margin-top:20px" data-submit-once>
   {% for q in test.questions %}
   <fieldset class="card question">
-    <legend><span class="qnum">{{ loop.index }}</span> {{ q.text }}</legend>
-    {% for opt in q.options %}
-      <label class="option">
-        <input type="radio" name="{{ q.id }}" value="{{ loop.index0 }}" required
-               {% if chosen.get(q.id) == loop.index0 %}checked{% endif %}>
-        <code>{{ opt }}</code>
-      </label>
-    {% endfor %}
+    <legend><span class="qnum">{{ loop.index }}</span><span>{{ q.text }}</span></legend>
+    <div class="options">
+      {% for opt in q.options %}
+        <label class="option">
+          <input type="radio" name="{{ q.id }}" value="{{ loop.index0 }}" required
+                 {% if chosen.get(q.id) == loop.index0 %}checked{% endif %}>
+          <span class="dot"></span><code>{{ opt }}</code>
+        </label>
+      {% endfor %}
+    </div>
   </fieldset>
   {% endfor %}
-  <button class="btn" type="submit" data-loading="Сақталуда…">Тестті аяқтау</button>
+  <button class="btn" type="submit" data-loading="Сақталуда…">{{ icon("check", 18) }} Тестті аяқтау</button>
 </form>
 {% endblock %}

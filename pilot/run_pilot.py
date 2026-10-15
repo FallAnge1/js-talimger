@@ -29,7 +29,30 @@ OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 TASKS = {t["task_id"]: t for t in PRACTICAL_TASKS}
 
 
+def write_csv(results, path):
+    """Excel-ге арналған CSV: «;» бөлгіші, UTF-8 BOM."""
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f, delimiter=";", lineterminator="\r\n")
+        w.writerow(["response_code", "task_id", "task_version", "kind", "answer_text", "ai_status", "model",
+                    "prompt_version", "ai_score", "teacher_score", "max_score", "diff_teacher_minus_ai",
+                    "ai_errors", "teacher_note"])
+        for r in results:
+            w.writerow([r["response_code"], r["task_id"], r["task_version"], r["kind"], r["answer_text"],
+                        r["ai_status"], r.get("model", ""), r.get("prompt_version", ""),
+                        "" if r.get("ai_score") is None else r["ai_score"], r["teacher_score"], r["max_score"],
+                        "" if r["diff"] is None else r["diff"], " | ".join(r.get("errors") or []), r["teacher_note"]])
+
+
 def main():
+    if "--csv-only" in sys.argv:
+        # JSON нәтижелерінен CSV файлдарын қайта жазу (ЖИ-ге сұраныс жіберілмейді)
+        for name in ("pilot_results", "pilot_results_v1"):
+            src = os.path.join(OUT_DIR, name + ".json")
+            if os.path.exists(src):
+                with open(src, encoding="utf-8") as f:
+                    write_csv(json.load(f), os.path.join(OUT_DIR, name + ".csv"))
+                print(name + ".csv қайта жазылды")
+        return
     load_env_file()
     if os.environ.get("AI_PROVIDER", "gemini") == "mock":
         print("AI_PROVIDER=mock: нақты ЖИ нәтижесі емес, есепке пайдаланбаңыз.")
@@ -91,17 +114,7 @@ def main():
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
-
-    with open(os.path.join(OUT_DIR, "pilot_results.csv"), "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["response_code", "task_id", "task_version", "kind", "answer_text", "ai_status", "model",
-                    "prompt_version", "ai_score", "teacher_score", "max_score", "diff_teacher_minus_ai",
-                    "ai_errors", "teacher_note"])
-        for r in results:
-            w.writerow([r["response_code"], r["task_id"], r["task_version"], r["kind"], r["answer_text"],
-                        r["ai_status"], r.get("model", ""), r.get("prompt_version", ""),
-                        "" if r.get("ai_score") is None else r["ai_score"], r["teacher_score"], r["max_score"],
-                        "" if r["diff"] is None else r["diff"], " | ".join(r.get("errors", [])), r["teacher_note"]])
+    write_csv(results, os.path.join(OUT_DIR, "pilot_results.csv"))
 
     ok = sum(r["ai_status"] == "done" for r in results)
     compared = [r for r in results if r["diff"] is not None]

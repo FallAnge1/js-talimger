@@ -1,81 +1,88 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
 {% block title %}Зерттеуші беті — JS-Тәлімгер{% endblock %}
 {% block content %}
 <div class="row-between">
-  <h1>Зерттеуші беті</h1>
-  <div class="actions">
-    <a class="btn" href="{{ url_for('export_responses') }}">⬇ Жауаптар (CSV)</a>
-    <a class="btn btn-ghost" href="{{ url_for('export_tests') }}">⬇ Тест нәтижелері (CSV)</a>
+  <div>
+    <h1>Зерттеуші беті</h1>
+    <p class="muted small">{{ icon("database", 15) }} {{ 'Firebase Firestore (бұлт)' if store_name == 'firestore' else 'Жергілікті файл (әзірлеу режимі)' }}</p>
+  </div>
+  <div class="row" style="flex-wrap:wrap">
+    <a class="btn" href="{{ url_for('export', name='responses', fmt='xlsx') }}">{{ icon("sheet", 18) }} Жауаптар · Excel</a>
+    <a class="btn btn-ghost" href="{{ url_for('export', name='responses', fmt='csv') }}">{{ icon("download", 18) }} CSV</a>
+    <a class="btn btn-ghost" href="{{ url_for('export', name='tests', fmt='xlsx') }}">{{ icon("sheet", 18) }} Тест · Excel</a>
+    <a class="btn btn-ghost" href="{{ url_for('export', name='tests', fmt='csv') }}">{{ icon("download", 18) }} CSV</a>
   </div>
 </div>
-<p class="muted small">Деректер қоры: <b>{{ 'Firebase Firestore (бұлт)' if store_name == 'firestore' else 'жергілікті файл (әзірлеу режимі)' }}</b></p>
 
-<section class="stats">
-  <div class="stat"><b>{{ stats.participants }}</b><span>қатысушы</span></div>
-  <div class="stat"><b>{{ stats.tests }}</b><span>тест тапсырылды</span></div>
-  <div class="stat"><b>{{ stats.responses }}</b><span>практикалық жауап</span></div>
-  <div class="stat"><b>{{ stats.ai_ok_pct }}%</b><span>сәтті ЖИ талдауы ({{ stats.ai_ok }}/{{ stats.responses }})</span></div>
-  <div class="stat"><b>{{ stats.reviewed }}</b><span>педагог тексерді</span></div>
-  <div class="stat"><b>{{ stats.corrected }}</b><span>ЖИ нәтижесі түзетілді</span></div>
-  <div class="stat"><b>{{ stats.mean_abs_diff if stats.mean_abs_diff is not none else '—' }}</b><span>ЖИ мен педагог бағасының орташа айырмасы</span></div>
-  <div class="stat"><b>{{ stats.exact_match }}/{{ stats.compared }}</b><span>баға толық сәйкес келді</span></div>
-</section>
+<div class="grid grid-4 section">
+  <div class="card stat">{{ tile("users", "blue") }}<div><b>{{ stats.participants }}</b><span>қатысушы</span></div></div>
+  <div class="card stat">{{ tile("clipboard", "violet") }}<div><b>{{ stats.tests }}</b><span>тест тапсырылды</span></div></div>
+  <div class="card stat">{{ tile("code", "amber") }}<div><b>{{ stats.responses }}</b><span>практикалық жауап</span></div></div>
+  <div class="card stat">{{ tile("sparkles", "green") }}<div><b>{{ stats.ai_ok_pct }}%</b><span>сәтті ЖИ ({{ stats.ai_ok }}/{{ stats.responses }})</span></div></div>
+  <div class="card stat">{{ tile("teacher", "blue") }}<div><b>{{ stats.reviewed }}</b><span>педагог тексерді</span></div></div>
+  <div class="card stat">{{ tile("pencil", "red") }}<div><b>{{ stats.corrected }}</b><span>ЖИ нәтижесі түзетілді</span></div></div>
+  <div class="card stat">{{ tile("target", "violet") }}<div><b>{{ stats.mean_abs_diff if stats.mean_abs_diff is not none else '—' }}</b><span>ЖИ мен педагог айырмасы (орт.)</span></div></div>
+  <div class="card stat">{{ tile("check", "green") }}<div><b>{{ stats.exact_match }}/{{ stats.compared }}</b><span>баға толық сәйкес</span></div></div>
+</div>
 
-<section class="card">
-  <h2>Практикалық тапсырмаларға жауаптар</h2>
+<div class="card section">
+  <p class="section-title">{{ icon("code", 16) }} Практикалық жауаптар</p>
   {% if rows %}
   <div class="table-scroll">
   <table class="table">
     <thead>
-      <tr><th>Жауап коды</th><th>Қатысушы</th><th>Тапсырма</th><th>Уақыты</th><th>ЖИ мәртебесі</th>
-          <th>ЖИ балы</th><th>Педагог балы</th><th>Айырма</th><th>Тексеру</th><th></th></tr>
+      <tr><th>Жауап</th><th>Қатысушы</th><th>Тапсырма</th><th>Уақыты</th><th>ЖИ</th>
+          <th>ЖИ балы</th><th>Педагог</th><th>Айырма</th><th>Тексеру</th><th></th></tr>
     </thead>
     <tbody>
     {% for r in rows %}
       <tr>
-        <td class="nowrap"><code>{{ r.resp.response_id }}</code></td>
-        <td>{{ r.resp.participant_code }}</td>
-        <td>{{ r.resp.task_id }} (v{{ r.resp.task_version }})</td>
-        <td class="nowrap">{{ r.resp.submitted_at|kz_time }}</td>
-        <td><span class="badge {{ 'ok' if r.resp.ai_status == 'done' else 'warn' }}">{{ AI_STATUS_LABELS[r.resp.ai_status] }}</span></td>
-        <td>{{ r.ai_score if r.ai_score is not none else '—' }} / {{ r.task.max_score }}</td>
-        <td>{{ r.teacher_score if r.teacher_score is not none else '—' }}</td>
-        <td>{{ '%+d'|format(r.diff) if r.diff is not none else '—' }}</td>
-        <td>{{ REVIEW_STATUS_LABELS[r.review.status] if r.review else 'Тексерілмеген' }}</td>
-        <td><a class="btn btn-small" href="{{ url_for('review', response_id=r.resp.response_id) }}">Тексеру</a></td>
+        <td class="nowrap mono small">{{ r.resp.response_id }}</td>
+        <td class="nowrap"><b>{{ r.resp.participant_code }}</b></td>
+        <td class="nowrap">{{ r.resp.task_id }}</td>
+        <td class="nowrap small muted">{{ r.resp.submitted_at|kz_time }}</td>
+        <td><span class="badge {{ 'ok' if r.resp.ai_status == 'done' else 'warn' }}" title="{{ AI_STATUS_LABELS[r.resp.ai_status] }}">
+          {{ icon("check" if r.resp.ai_status == 'done' else "alert", 14) }}</span></td>
+        <td class="nowrap">{{ r.ai_score if r.ai_score is not none else '—' }} / {{ r.task.max_score }}</td>
+        <td class="nowrap">{{ r.teacher_score if r.teacher_score is not none else '—' }}</td>
+        <td class="nowrap">{{ ('%+d'|format(r.diff) if r.diff else '0') if r.diff is not none else '—' }}</td>
+        <td>{% if r.review and r.review.status != 'not_reviewed' %}<span class="badge ok">{{ icon("check", 14) }} {{ 'түзетілді' if r.review.status == 'corrected' else 'келісемін' }}</span>
+            {% else %}<span class="badge">күтуде</span>{% endif %}</td>
+        <td><a class="btn btn-small" href="{{ url_for('review', response_id=r.resp.response_id) }}">{{ icon("pencil", 15) }} Тексеру</a></td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
   {% else %}
-    <p class="muted">Әзірге жауаптар жоқ.</p>
+    <p class="muted">{{ icon("info", 16) }} Әзірге жауаптар жоқ.</p>
   {% endif %}
-</section>
+</div>
 
-<div class="grid-2">
-  <section class="card">
-    <h2>Тест нәтижелері</h2>
+<div class="grid grid-2 section">
+  <div class="card">
+    <p class="section-title">{{ icon("clipboard", 16) }} Тест нәтижелері</p>
     {% if test_results %}
     <table class="table">
       <thead><tr><th>Қатысушы</th><th>Балл</th><th>Уақыты</th></tr></thead>
       <tbody>
       {% for t in test_results %}
-        <tr><td>{{ t.participant_code }}</td><td>{{ t.score }} / {{ t.max_score }}</td><td class="nowrap">{{ t.submitted_at|kz_time }}</td></tr>
+        <tr><td><b>{{ t.participant_code }}</b></td><td>{{ t.score }} / {{ t.max_score }}</td><td class="nowrap small muted">{{ t.submitted_at|kz_time }}</td></tr>
       {% endfor %}
       </tbody>
     </table>
     {% else %}<p class="muted">Әзірге тест тапсырылмаған.</p>{% endif %}
-  </section>
+  </div>
 
-  <section class="card">
-    <h2>Тест бойынша жиі қате жіберілген тақырыптар</h2>
+  <div class="card">
+    <p class="section-title">{{ icon("alert", 16) }} Жиі қате тақырыптар</p>
     {% if topic_errors %}
-    <table class="table">
-      <thead><tr><th>Тақырып</th><th>Қате саны</th></tr></thead>
-      <tbody>{% for topic, n in topic_errors %}<tr><td>{{ topic }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody>
-    </table>
+      {% set top = topic_errors[0][1] %}
+      {% for topic, n in topic_errors %}
+        <div class="bar-row"><span>{{ topic }}</span><span class="bar"><span style="width: {{ (100 * n / top)|round|int }}%"></span></span><b class="small">{{ n }}</b></div>
+      {% endfor %}
     {% else %}<p class="muted">Деректер жоқ.</p>{% endif %}
-  </section>
+  </div>
 </div>
 {% endblock %}

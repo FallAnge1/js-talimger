@@ -1,29 +1,39 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
 {% block title %}{{ task.title }} — JS-Тәлімгер{% endblock %}
 {% block content %}
-<a class="small" href="{{ url_for('tasks') }}">← Тапсырмалар тізімі</a>
-<h1>{{ task.task_id }}. {{ task.title }}</h1>
-
-<section class="card">
-  <h2>Тапсырма</h2>
-  <pre class="task-text">{{ task.text }}</pre>
-  <details>
-    <summary>Бағалау критерийлері ({{ task.max_score }} балл)</summary>
-    <ul>
-      {% for c in task.criteria %}<li>{{ c.name }} — 0–{{ c.max }} балл</li>{% endfor %}
-    </ul>
-  </details>
-</section>
-
-<form method="post" class="card stack" data-submit-once>
-  <div class="row-between">
-    <span>Қатысушы коды: <b>{{ participant }}</b></span>
-    <span class="muted small"><span data-counter-for="answer">0</span> / {{ max_len }} таңба</span>
+{% set TASK_ICONS = {"P1": ("braces", "amber"), "P2": ("trending", "green"), "P3": ("pointer", "violet")} %}
+{% set ic = TASK_ICONS.get(task.task_id, ("code", "blue")) %}
+<a class="back" href="{{ url_for('tasks') }}">{{ icon("arrow-left", 16) }} Тапсырмалар</a>
+<div class="row" style="margin:8px 0 18px">
+  {{ tile(ic[0], ic[1]) }}
+  <div>
+    <h1 style="margin:0">{{ task.title }}</h1>
+    <div class="meta"><span>{{ icon("target", 15) }} {{ task.skill }}</span><span>{{ icon("chart", 15) }} {{ task.max_score }} балл</span></div>
   </div>
-  <label for="answer">Сіздің жауабыңыз: код және қысқаша түсіндірме</label>
-  <textarea id="answer" name="answer" rows="16" maxlength="{{ max_len }}" spellcheck="false"
-            class="code-input" placeholder="function ... {&#10;  ...&#10;}&#10;&#10;Түсіндірме: ...">{{ answer }}</textarea>
-  <p class="muted small">Код серверде орындалмайды, ол мәтін ретінде талданады. Жауапты бір рет жіберуге болады.</p>
-  <button class="btn" type="submit" data-loading="ЖИ жауабыңызды талдап жатыр… (10–30 секунд)">Жауапты жіберу</button>
-</form>
+</div>
+
+<div class="grid grid-2" style="align-items:start">
+  <div class="card stack-lg">
+    <p class="section-title" style="margin:0">{{ icon("file", 16) }} Тапсырма</p>
+    <pre class="task-text">{{ task.text }}</pre>
+    <details>
+      <summary>{{ icon("list", 16) }} Бағалау критерийлері</summary>
+      {% for c in task.criteria %}
+        <div class="result-row small"><span class="qnum">{{ loop.index }}</span><span class="label">{{ c.name }}</span><span class="badge">0–{{ c.max }}</span></div>
+      {% endfor %}
+    </details>
+  </div>
+
+  <form method="post" class="card stack" data-submit-once>
+    <div class="row-between">
+      <label for="answer" style="display:flex;align-items:center;gap:8px">{{ icon("code", 18) }} Код + түсіндірме</label>
+      <span class="hint"><span data-counter-for="answer">0</span> / {{ max_len }}</span>
+    </div>
+    <textarea id="answer" name="answer" rows="14" maxlength="{{ max_len }}" spellcheck="false"
+              class="code-input" placeholder="function ... {&#10;  ...&#10;}&#10;&#10;Түсіндірме: ...">{{ answer }}</textarea>
+    <p class="hint" style="display:flex;gap:6px;align-items:center">{{ icon("info", 15) }} Код орындалмайды, мәтін ретінде талданады. Бір рет жіберіледі.</p>
+    <button class="btn" type="submit" data-loading="ЖИ талдап жатыр… (10–30 с)">{{ icon("send", 18) }} Жауапты жіберу</button>
+  </form>
+</div>
 {% endblock %}
