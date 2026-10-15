@@ -75,7 +75,7 @@ s.addText("JS-Тәлімгер", { placeholder: "title" });
 s.addText("JavaScript бойынша ЖИ кері байланысы бар диагностикалық бұлттық веб қосымша", { placeholder: "body" });
 s.addText([
   { text: "1-аралық бақылау жобасы · «Педагогикалық зерттеулерді ұйымдастырудағы бұлтты технологиялар»", options: { breakLine: true } },
-  { text: "Магистрант: " }, { text: "[аты-жөні]", options: PH }, { text: " · 7М01511 – Информатика · 2026" },
+  { text: "Магистрант: Касым Сагынгали · 7М01511 – Информатика · 2026" },
 ], { x: 0.6, y: 4.3, w: 8.8, h: 0.7, fontSize: 14, color: "C9D0DE", margin: 0, paraSpaceAfter: 4, objectName: "meta", isTextBox: true });
 s.addNotes("Сәлеметсіздер ме. Жобамның тақырыбы — педагогикалық зерттеуге арналған бұлттық веб қосымшаны әзірлеу және ЖИ сервисін API арқылы интеграциялау. Қосымша менің диссертациямның тақырыбына — JavaScript-ті ЖИ көмегімен оқытуға арналған онлайн платформаға — тікелей байланысты.");
 
@@ -212,8 +212,8 @@ cols.forEach(([head, body], i) => {
   s.addText(body, { x: x + 0.25, y: 2.5, w: 2.4, h: 1.55, fontSize: 14, color: "D5DBE7", valign: "top", margin: 0, objectName: `close-body-${i}`, isTextBox: true });
 });
 s.addText([
-  { text: "Қосымша: ", options: { bold: true } }, { text: "[сілтеме]", options: PH },
-  { text: "    Код: ", options: { bold: true } }, { text: "[GitHub сілтемесі]", options: PH },
+  { text: "Қосымша: ", options: { bold: true } }, { text: "js-talimger.onrender.com", options: { hyperlink: { url: "https://js-talimger.onrender.com" }, color: "F0C419" } },
+  { text: "    Код: ", options: { bold: true } }, { text: "github.com/FallAnge1/js-talimger", options: { hyperlink: { url: "https://github.com/FallAnge1/js-talimger" }, color: "F0C419" } },
 ], { x: 0.5, y: 4.45, w: 9.0, h: 0.4, fontSize: 14, color: C.background1, margin: 0, objectName: "links", isTextBox: true });
 s.addNotes("Қорытынды: зерттеу міндетін шешетін, деректерді бұлтта сақтайтын және ЖИ кері байланысын педагог бақылауымен беретін қосымша жасалды. Шектеулері — код орындалмайды, тегін API лимиттері бар, әзірге модельдік деректер аз. Келесі қадам — пилоттық тексеру және 2-аралық жобаға педагог тексерген деректерді жинау. Назарларыңызға рахмет.");
 
