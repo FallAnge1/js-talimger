@@ -4,10 +4,10 @@
 {% block content %}
 <a class="back" href="{{ url_for('tasks') }}">{{ icon("arrow-left", 16) }} Тапсырмалар</a>
 <div class="row" style="margin-top:8px">
-  {{ tile("clipboard", "blue") }}
+  {{ tile("trending" if kind == 'post' else "clipboard", "green" if kind == 'post' else "blue") }}
   <div>
-    <h1 style="margin:0">Диагностикалық тест</h1>
-    <p class="muted small" style="margin:0">Әр сұраққа бір жауап · бір рет тапсырылады</p>
+    <h1 style="margin:0">{{ 'Қорытынды тест' if kind == 'post' else 'Диагностикалық тест' }}</h1>
+    <p class="muted small" style="margin:0">{% if kind == 'post' %}Сол тақырыптар, жаңа сұрақтар — деңгейіңіз қалай өзгергенін көрсетеді{% else %}Нәтиже бойынша деңгейіңіз анықталып, сізге тапсырма таңдалады{% endif %} · бір рет тапсырылады</p>
   </div>
 </div>
 

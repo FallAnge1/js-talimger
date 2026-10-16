@@ -24,7 +24,7 @@ from flask import (
 
 import ai_service
 from storage import create_store
-from tasks_data import ALL_TASKS, TEST_ID
+from tasks_data import ALL_TASKS, LEVEL_ORDER, LEVELS, POST_TEST_ID, TEST_ID, level_for_score
 
 log = logging.getLogger("js_talimger")
 
@@ -35,6 +35,8 @@ MAX_ANSWER_LEN = 5000
 MAX_ATTEMPTS = 3  # бастапқы жауап + 2 түзету
 MAX_HINTS = 2  # бір тапсырмаға ЖИ кеңесі
 MAX_QUESTION_LEN = 500
+# Диагностикалық тесттен кейін берілетін деңгейлік тапсырма саны (әдістеме талап етсе — 3)
+TASKS_PER_PARTICIPANT = int(os.environ.get("TASKS_PER_PARTICIPANT", "1"))
 
 AI_STATUS_LABELS = {
     "pending": "Талдау күтілуде",
@@ -62,7 +64,7 @@ def make_response_id(participant_code, task_id):
 def seed_tasks(store):
     for task in ALL_TASKS:
         existing = store.get("tasks", task["task_id"])
-        if not existing or existing.get("version") != task["version"]:
+        if existing != task:  # жаңа тапсырма, жаңа нұсқа немесе метадеректер (деңгей, тақырыптар) өзгерді
             store.set("tasks", task["task_id"], task)
 
 
@@ -99,6 +101,7 @@ def create_app(store=None):
             "is_researcher": bool(session.get("researcher")),
             "AI_STATUS_LABELS": AI_STATUS_LABELS,
             "REVIEW_STATUS_LABELS": REVIEW_STATUS_LABELS,
+            "LEVELS": LEVELS,
         }
 
     # ---------- көмекші функциялар ----------
@@ -221,6 +224,60 @@ def create_app(store=None):
         fb = store.get("ai_feedback", response_id)
         return fb.get("suggested_score") if fb else None
 
+    def grade_test(test_def):
+        """Формадағы тест жауаптарын тексереді: (таңдалғандар, жауапсыз сұрақтар, толық нәтиже)."""
+        chosen, missing = {}, []
+        for q in test_def["questions"]:
+            value = request.form.get(q["id"])
+            if value is None or not value.isdigit() or int(value) >= len(q["options"]):
+                missing.append(q["id"])
+            else:
+                chosen[q["id"]] = int(value)
+        details = [
+            {"id": q["id"], "topic": q["topic"], "chosen": chosen[q["id"]], "correct": chosen[q["id"]] == q["correct"]}
+            for q in test_def["questions"] if q["id"] in chosen
+        ]
+        return chosen, missing, details
+
+    def summarize(result):
+        """Тест нәтижесіне деңгей мен әлсіз тақырыптарды қосады (ескі жазбалар үшін де)."""
+        if not result:
+            return None
+        level = result.get("level") or level_for_score(result["score"])
+        return dict(result, level=level, level_name=LEVELS[level]["name"],
+                    weak_topics=[a["topic"] for a in result["answers"] if not a["correct"]])
+
+    def ensure_assignment(code):
+        """Диагностикалық тест бойынша деңгейлік тапсырманы ЖИ арқылы таңдайды (бір рет)."""
+        existing = store.get("assignments", code)
+        if existing:
+            return existing
+        pre = summarize(store.get("test_results", code))
+        if not pre:
+            return None
+        candidates = [t for t in practical_tasks() if t.get("level") == pre["level"]]
+        choice = ai_service.select_tasks(pre["level_name"], pre["score"], pre["max_score"], pre["weak_topics"],
+                                         candidates, TASKS_PER_PARTICIPANT)
+        doc = {
+            "participant_code": code,
+            "level": pre["level"],
+            "pre_score": pre["score"],
+            "weak_topics": pre["weak_topics"],
+            "task_ids": choice["task_ids"],
+            "reason": choice["reason"],
+            "chosen_by": choice["chosen_by"],
+            "model": choice["model"],
+            "prompt_version": choice["prompt_version"],
+            "created_at": now_iso(),
+        }
+        store.create("assignments", code, doc)
+        return store.get("assignments", code) or doc
+
+    def practical_done(code, assignment):
+        return bool(assignment) and all(
+            store.get("responses", make_response_id(code, tid)) for tid in assignment["task_ids"]
+        )
+
     def answer_error(answer):
         if not answer:
             return "Жауап өрісі бос. Шешіміңізді енгізіңіз."
@@ -234,7 +291,7 @@ def create_app(store=None):
 
     @app.route("/")
     def index():
-        return render_template("index.html", tasks=practical_tasks())
+        return render_template("index.html", tasks_per_participant=TASKS_PER_PARTICIPANT)
 
     @app.post("/start")
     def start():
@@ -266,20 +323,11 @@ def create_app(store=None):
 
         chosen = {}
         if request.method == "POST":
-            missing = []
-            for q in test_def["questions"]:
-                value = request.form.get(q["id"])
-                if value is None or not value.isdigit() or int(value) >= len(q["options"]):
-                    missing.append(q["id"])
-                else:
-                    chosen[q["id"]] = int(value)
+            chosen, missing, details = grade_test(test_def)
             if missing:
                 flash(f"Барлық сұраққа жауап беріңіз (жауапсыз сұрақтар саны: {len(missing)}).", "error")
             else:
-                details = [
-                    {"id": q["id"], "topic": q["topic"], "chosen": chosen[q["id"]], "correct": chosen[q["id"]] == q["correct"]}
-                    for q in test_def["questions"]
-                ]
+                score = sum(d["correct"] for d in details)
                 store.create(
                     "test_results",
                     code,
@@ -287,29 +335,38 @@ def create_app(store=None):
                         "participant_code": code,
                         "test_id": TEST_ID,
                         "test_version": test_def["version"],
+                        "kind": "pre",
                         "answers": details,
-                        "score": sum(d["correct"] for d in details),
+                        "score": score,
                         "max_score": len(details),
+                        "level": level_for_score(score),
                         "submitted_at": now_iso(),
                     },
                 )
+                ensure_assignment(code)
                 return redirect(url_for("test_result"))
-        return render_template("test.html", test=test_def, chosen=chosen)
+        return render_template("test.html", test=test_def, chosen=chosen, kind="pre")
 
     @app.route("/test/result")
     @participant_required
     def test_result():
-        result = store.get("test_results", session["participant"])
+        code = session["participant"]
+        result = summarize(store.get("test_results", code))
         if not result:
             return redirect(url_for("test"))
-        return render_template("test_result.html", result=result)
+        assignment = ensure_assignment(code)
+        assigned = [store.get("tasks", tid) for tid in assignment["task_ids"]] if assignment else []
+        return render_template("test_result.html", result=result, assignment=assignment, assigned=assigned)
 
     @app.route("/tasks")
     @participant_required
     def tasks():
         code = session["participant"]
+        pre = summarize(store.get("test_results", code))
+        assignment = ensure_assignment(code) if pre else None
+        assigned = [store.get("tasks", tid) for tid in assignment["task_ids"]] if assignment else []
         progress = {}
-        for t in practical_tasks():
+        for t in assigned:
             root = store.get("responses", make_response_id(code, t["task_id"]))
             if not root:
                 continue
@@ -320,11 +377,15 @@ def create_app(store=None):
                 "first_score": ai_score(attempts[0]["response_id"]),
                 "last_score": ai_score(attempts[-1]["response_id"]),
             }
+        post = summarize(store.get("post_test_results", code))
         return render_template(
             "tasks.html",
-            tasks=practical_tasks(),
+            tasks=assigned,
             progress=progress,
-            test_result=store.get("test_results", code),
+            test_result=pre,
+            assignment=assignment,
+            practical_done=practical_done(code, assignment),
+            post_result=post,
         )
 
     @app.route("/task/<task_id>", methods=["GET", "POST"])
@@ -335,6 +396,14 @@ def create_app(store=None):
         response_id = make_response_id(code, task_id)
         existing = store.get("responses", response_id)
         answer = ""
+        if not existing:
+            if not store.get("test_results", code):
+                flash("Практикалық тапсырма диагностикалық тесттен кейін ашылады.", "warning")
+                return redirect(url_for("test"))
+            assignment = ensure_assignment(code)
+            if not assignment or task_id not in assignment["task_ids"]:
+                flash("Бұл тапсырма сіздің деңгейіңізге тағайындалмаған.", "warning")
+                return redirect(url_for("tasks"))
 
         if request.method == "POST":
             answer = request.form.get("answer", "").replace("\r\n", "\n").strip()
@@ -396,7 +465,64 @@ def create_app(store=None):
             can_hint=is_owner(resp) and latest and ready and len(hints) < MAX_HINTS,
             max_len=MAX_ANSWER_LEN,
             max_question=MAX_QUESTION_LEN,
+            post_ready=is_owner(resp) and not store.get("post_test_results", resp["participant_code"])
+            and practical_done(resp["participant_code"], store.get("assignments", resp["participant_code"])),
         )
+
+    # ---------- қорытынды тест ----------
+
+    @app.route("/posttest", methods=["GET", "POST"])
+    @participant_required
+    def posttest():
+        code = session["participant"]
+        if store.get("post_test_results", code):
+            return redirect(url_for("posttest_result"))
+        if not store.get("test_results", code):
+            flash("Алдымен диагностикалық тестті тапсырыңыз.", "warning")
+            return redirect(url_for("test"))
+        if not practical_done(code, ensure_assignment(code)):
+            flash("Қорытынды тест деңгейлік тапсырманы орындағаннан кейін ашылады.", "warning")
+            return redirect(url_for("tasks"))
+        test_def = store.get("tasks", POST_TEST_ID)
+        chosen = {}
+        if request.method == "POST":
+            chosen, missing, details = grade_test(test_def)
+            if missing:
+                flash(f"Барлық сұраққа жауап беріңіз (жауапсыз сұрақтар саны: {len(missing)}).", "error")
+            else:
+                score = sum(d["correct"] for d in details)
+                store.create(
+                    "post_test_results",
+                    code,
+                    {
+                        "participant_code": code,
+                        "test_id": POST_TEST_ID,
+                        "test_version": test_def["version"],
+                        "kind": "post",
+                        "answers": details,
+                        "score": score,
+                        "max_score": len(details),
+                        "level": level_for_score(score),
+                        "submitted_at": now_iso(),
+                    },
+                )
+                return redirect(url_for("posttest_result"))
+        return render_template("test.html", test=test_def, chosen=chosen, kind="post")
+
+    @app.route("/posttest/result")
+    @participant_required
+    def posttest_result():
+        code = session["participant"]
+        pre = summarize(store.get("test_results", code))
+        post = summarize(store.get("post_test_results", code))
+        if not post:
+            return redirect(url_for("posttest"))
+        topics = [
+            {"topic": a["topic"], "pre": a["correct"], "post": b["correct"]}
+            for a, b in zip(pre["answers"], post["answers"])
+        ]
+        change = LEVEL_ORDER.index(post["level"]) - LEVEL_ORDER.index(pre["level"])
+        return render_template("posttest_result.html", pre=pre, post=post, topics=topics, change=change)
 
     @app.post("/feedback/<response_id>/revise")
     def revise(response_id):
@@ -591,10 +717,38 @@ def create_app(store=None):
             "compared": len(compared),
         }
 
+    def level_rows():
+        """Әр қатысушы: алдын ала тест → тағайындалған тапсырма → қорытынды тест."""
+        posts = {p["participant_code"]: summarize(p) for p in store.list("post_test_results")}
+        assignments = {a["participant_code"]: a for a in store.list("assignments")}
+        out = []
+        for t in sorted(store.list("test_results"), key=lambda t: t["submitted_at"]):
+            pre = summarize(t)
+            post = posts.get(pre["participant_code"])
+            change = (LEVEL_ORDER.index(post["level"]) - LEVEL_ORDER.index(pre["level"])) if post else None
+            out.append({"code": pre["participant_code"], "pre": pre, "post": post,
+                        "assignment": assignments.get(pre["participant_code"]),
+                        "gain": post["score"] - pre["score"] if post else None, "change": change})
+        return out
+
+    def level_stats(rows):
+        done = [r for r in rows if r["post"]]
+        return {
+            "pre_mean": round(sum(r["pre"]["score"] for r in rows) / len(rows), 2) if rows else None,
+            "post_mean": round(sum(r["post"]["score"] for r in done) / len(done), 2) if done else None,
+            "mean_gain": round(sum(r["gain"] for r in done) / len(done), 2) if done else None,
+            "post_count": len(done),
+            "level_up": sum(1 for r in done if r["change"] > 0),
+            "level_same": sum(1 for r in done if r["change"] == 0),
+            "level_down": sum(1 for r in done if r["change"] < 0),
+            "by_level": {k: sum(1 for r in rows if r["pre"]["level"] == k) for k in LEVEL_ORDER},
+        }
+
     @app.route("/researcher")
     @researcher_required
     def researcher():
         rows = collect_rows()
+        lrows = level_rows()
         test_results = sorted(store.list("test_results"), key=lambda t: t["submitted_at"])
         test_def = store.get("tasks", TEST_ID)
         topic_errors = {}
@@ -610,6 +764,8 @@ def create_app(store=None):
             test_def=test_def,
             topic_errors=sorted(topic_errors.items(), key=lambda kv: -kv[1]),
             store_name=store.name,
+            level_rows=list(reversed(lrows)),
+            lstats=level_stats(lrows),
         )
 
     @app.route("/researcher/ai-check", methods=["GET", "POST"])
@@ -710,14 +866,22 @@ def create_app(store=None):
     def tests_table():
         test_def = store.get("tasks", TEST_ID)
         qids = [q["id"] for q in test_def["questions"]]
-        header = ["participant_code", "test_version", "submitted_at_kz", "score", "max_score"]
-        header += [f"{q}_correct" for q in qids]
+        header = ["participant_code", "pre_submitted_at_kz", "pre_score", "pre_level", "weak_topics",
+                  "assigned_tasks", "chosen_by", "selection_reason", "post_submitted_at_kz", "post_score",
+                  "post_level", "score_gain", "level_change"]
+        header += [f"pre_{q}" for q in qids] + [f"post_{q}" for q in qids]
         out = []
-        for t in sorted(store.list("test_results"), key=lambda t: t["submitted_at"]):
-            by_id = {a["id"]: a for a in t["answers"]}
+        for r in level_rows():
+            pre, post, a = r["pre"], r["post"] or {}, r["assignment"] or {}
+            pre_by = {x["id"]: x for x in pre["answers"]}
+            post_by = {x["id"]: x for x in post.get("answers", [])}
             out.append(
-                [t["participant_code"], t["test_version"], local_time(t["submitted_at"]), t["score"], t["max_score"]]
-                + [int(by_id[q]["correct"]) if q in by_id else "" for q in qids]
+                [r["code"], local_time(pre["submitted_at"]), pre["score"], pre["level"], " | ".join(pre["weak_topics"]),
+                 " ".join(a.get("task_ids", [])), a.get("chosen_by", ""), a.get("reason", ""),
+                 local_time(post.get("submitted_at", "")), post.get("score", ""), post.get("level", ""),
+                 "" if r["gain"] is None else r["gain"], "" if r["change"] is None else r["change"]]
+                + [int(pre_by[q]["correct"]) if q in pre_by else "" for q in qids]
+                + [int(post_by[q]["correct"]) if q in post_by else "" for q in qids]
             )
         return header, out
 
@@ -760,7 +924,7 @@ def create_app(store=None):
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
         long_text = {"answer_text", "ai_strengths", "ai_errors", "ai_recommendation", "teacher_comment",
-                     "corrected_feedback", "diff_reason", "question", "hint"}
+                     "corrected_feedback", "diff_reason", "question", "hint", "selection_reason", "weak_topics"}
         for idx, name in enumerate(header, start=1):
             letter = ws.cell(row=1, column=idx).column_letter
             if name in long_text:

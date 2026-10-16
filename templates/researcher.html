@@ -10,7 +10,7 @@
   <div class="row" style="flex-wrap:wrap">
     <a class="btn" href="{{ url_for('export', name='responses', fmt='xlsx') }}">{{ icon("sheet", 18) }} Жауаптар · Excel</a>
     <a class="btn btn-ghost" href="{{ url_for('export', name='responses', fmt='csv') }}">{{ icon("download", 18) }} CSV</a>
-    <a class="btn btn-ghost" href="{{ url_for('export', name='tests', fmt='xlsx') }}">{{ icon("sheet", 18) }} Тест · Excel</a>
+    <a class="btn btn-ghost" href="{{ url_for('export', name='tests', fmt='xlsx') }}">{{ icon("sheet", 18) }} Тесттер · Excel</a>
     <a class="btn btn-ghost" href="{{ url_for('export', name='tests', fmt='csv') }}">{{ icon("download", 18) }} CSV</a>
     <a class="btn btn-ghost" href="{{ url_for('export', name='hints', fmt='xlsx') }}">{{ icon("bulb", 18) }} Кеңестер · Excel</a>
     <a class="btn btn-ghost" href="{{ url_for('ai_check') }}">{{ icon("sparkles", 18) }} ЖИ сервистері</a>
@@ -26,6 +26,44 @@
   <div class="card stat">{{ tile("pencil", "red") }}<div><b>{{ stats.corrected }}</b><span>ЖИ нәтижесі түзетілді</span></div></div>
   <div class="card stat">{{ tile("target", "violet") }}<div><b>{{ stats.mean_abs_diff if stats.mean_abs_diff is not none else '—' }}</b><span>ЖИ мен педагог айырмасы (орт.)</span></div></div>
   <div class="card stat">{{ tile("check", "green") }}<div><b>{{ stats.exact_match }}/{{ stats.compared }}</b><span>баға толық сәйкес</span></div></div>
+</div>
+
+<p class="section-title">{{ icon("trending", 16) }} Деңгей: диагностикалық → қорытынды тест</p>
+<div class="grid grid-4">
+  <div class="card stat">{{ tile("clipboard", "blue") }}<div><b>{{ lstats.pre_mean if lstats.pre_mean is not none else '—' }}</b><span>диагностикалық тест, орт. балл</span></div></div>
+  <div class="card stat">{{ tile("trending", "green") }}<div><b>{{ lstats.post_mean if lstats.post_mean is not none else '—' }}</b><span>қорытынды тест, орт. балл ({{ lstats.post_count }} қатысушы)</span></div></div>
+  <div class="card stat">{{ tile("chart", "violet") }}<div><b>{{ ('%+.2f'|format(lstats.mean_gain)) if lstats.mean_gain is not none else '—' }}</b><span>балл өсімі (орт.)</span></div></div>
+  <div class="card stat">{{ tile("target", "amber") }}<div><b>{{ lstats.level_up }} / {{ lstats.post_count }}</b><span>деңгейі көтерілді (өзгермеді: {{ lstats.level_same }})</span></div></div>
+</div>
+<div class="card section">
+  <div class="row-between">
+    <p class="section-title" style="margin:0">{{ icon("users", 16) }} Қатысушылардың жолы</p>
+    <span class="hint">Бастапқы деңгей бойынша: {% for k, n in lstats.by_level.items() %}{{ LEVELS[k].name }} — {{ n }}{{ '; ' if not loop.last }}{% endfor %}</span>
+  </div>
+  {% if level_rows %}
+  <div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>Қатысушы</th><th>Диагн. тест</th><th>Деңгей</th><th>Тапсырма</th><th>Таңдау</th><th>Қорытынды тест</th><th>Деңгей</th><th>Өзгеріс</th></tr></thead>
+    <tbody>
+    {% for r in level_rows %}
+      <tr>
+        <td class="nowrap"><b>{{ r.code }}</b></td>
+        <td>{{ r.pre.score }}/{{ r.pre.max_score }}</td>
+        <td>{{ r.pre.level_name }}</td>
+        <td class="nowrap">{{ (r.assignment.task_ids|join(', ')) if r.assignment else '—' }}</td>
+        <td>{% if r.assignment %}<span class="badge {{ 'ai' if r.assignment.chosen_by == 'ai' else '' }}" title="{{ r.assignment.reason }}">{{ 'ЖИ' if r.assignment.chosen_by == 'ai' else 'авто' }}</span>{% else %}—{% endif %}</td>
+        <td>{{ (r.post.score ~ '/' ~ r.post.max_score) if r.post else '—' }}</td>
+        <td>{{ r.post.level_name if r.post else '—' }}</td>
+        <td>{% if r.change is none %}<span class="badge">күтуде</span>
+            {% elif r.change > 0 %}<span class="badge ok">{{ icon("trending", 14) }} көтерілді · {{ '%+d'|format(r.gain) }}</span>
+            {% elif r.change < 0 %}<span class="badge bad">төмендеді · {{ '%+d'|format(r.gain) }}</span>
+            {% else %}<span class="badge">өзгермеді · {{ ('%+d'|format(r.gain)) if r.gain else '0' }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="muted">Әзірге деректер жоқ.</p>{% endif %}
 </div>
 
 <p class="section-title">{{ icon("pencil", 16) }} Қатемен жұмыс</p>

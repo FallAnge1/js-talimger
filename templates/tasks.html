@@ -1,26 +1,29 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon, tile with context %}
-{% block title %}Тапсырмалар — JS-Тәлімгер{% endblock %}
+{% block title %}Менің жолым — JS-Тәлімгер{% endblock %}
 {% block content %}
-{% set TASK_ICONS = {"P1": ("braces", "amber"), "P2": ("trending", "green"), "P3": ("pointer", "violet")} %}
-{% set done = (1 if test_result else 0) + progress|length %}
-{% set total = 1 + tasks|length %}
+{% set TONE = {"low": "amber", "mid": "blue", "high": "green"} %}
+{% set done = (1 if test_result else 0) + (1 if practical_done else 0) + (1 if post_result else 0) %}
 
 <div class="row-between">
-  <h1>Тапсырмалар</h1>
-  <span class="badge {{ 'ok' if done == total else '' }}">{{ icon("check", 14) }} {{ done }} / {{ total }} орындалды</span>
+  <h1>Менің жолым</h1>
+  <span class="badge {{ 'ok' if done == 3 else '' }}">{{ icon("check", 14) }} {{ done }} / 3 кезең</span>
 </div>
-<div class="progress" style="margin:4px 0 22px"><span style="width: {{ (100 * done / total)|round|int }}%"></span></div>
+<div class="progress" style="margin:4px 0 22px"><span style="width: {{ (100 * done / 3)|round|int }}%"></span></div>
 
 <div class="stack-lg">
+  {# 1 — диагностикалық тест #}
   <div class="card task-card {{ 'done' if test_result }}">
     {{ tile("clipboard", "blue") }}
     <div class="body">
+      <span class="step-num">1-КЕЗЕҢ</span>
       <h3>Диагностикалық тест</h3>
       <div class="meta">
         <span>{{ icon("list", 15) }} 10 сұрақ</span>
-        <span>{{ icon("clock", 15) }} ~10 мин</span>
-        {% if test_result %}<span class="badge ok">{{ icon("check", 14) }} {{ test_result.score }} / {{ test_result.max_score }}</span>{% endif %}
+        {% if test_result %}
+          <span class="badge ok">{{ icon("check", 14) }} {{ test_result.score }} / {{ test_result.max_score }}</span>
+          <span class="badge">{{ icon("target", 14) }} Деңгей: {{ test_result.level_name }}</span>
+        {% else %}<span>{{ icon("clock", 15) }} ~10 мин</span>{% endif %}
       </div>
     </div>
     {% if test_result %}
@@ -30,34 +33,67 @@
     {% endif %}
   </div>
 
-  {% for t in tasks %}
-    {% set pr = progress.get(t.task_id) %}
-    {% set r = pr.latest if pr else none %}
-    {% set ic = TASK_ICONS.get(t.task_id, ("code", "blue")) %}
-    <div class="card task-card {{ 'done' if r }}">
-      {{ tile(ic[0], ic[1]) }}
-      <div class="body">
-        <h3>{{ t.task_id }} · {{ t.title }}</h3>
-        <div class="meta">
-          <span>{{ icon("target", 15) }} {{ t.skill }}</span>
-          <span>{{ icon("chart", 15) }} {{ t.max_score }} балл</span>
-          {% if r %}
-            <span class="badge {{ 'ok' if r.ai_status == 'done' else 'warn' }}">
-              {{ icon("check" if r.ai_status == 'done' else "clock", 14) }} {{ AI_STATUS_LABELS[r.ai_status] }}</span>
-            {% if pr.count > 1 %}
-              <span class="badge ai">{{ icon("refresh", 14) }} {{ pr.count }} талпыныс{% if pr.first_score is not none and pr.last_score is not none %} · {{ pr.first_score }} → {{ pr.last_score }}{% endif %}</span>
-            {% elif pr.last_score is not none %}
-              <span class="badge">{{ pr.last_score }}/{{ t.max_score }}</span>
-            {% endif %}
-          {% endif %}
-        </div>
-      </div>
-      {% if r %}
-        <a class="btn btn-ghost" href="{{ url_for('feedback', response_id=r.response_id) }}">{{ icon("sparkles", 18) }} Кері байланыс</a>
-      {% else %}
-        <a class="btn" href="{{ url_for('task', task_id=t.task_id) }}">Орындау {{ icon("arrow-right", 18) }}</a>
-      {% endif %}
+  {# 2 — деңгейлік тапсырма #}
+  {% if not test_result %}
+    <div class="card task-card" style="opacity:.6">
+      {{ tile("lock", "violet") }}
+      <div class="body"><span class="step-num">2-КЕЗЕҢ</span><h3>Деңгейлік тапсырма</h3>
+        <div class="meta"><span>{{ icon("lock", 15) }} Диагностикалық тесттен кейін ашылады</span></div></div>
     </div>
-  {% endfor %}
+  {% else %}
+    {% for t in tasks %}
+      {% set pr = progress.get(t.task_id) %}
+      {% set r = pr.latest if pr else none %}
+      <div class="card task-card {{ 'done' if r }}">
+        {{ tile("code", TONE[t.level]) }}
+        <div class="body">
+          <span class="step-num">2-КЕЗЕҢ · {{ LEVELS[t.level].name|upper }} ДЕҢГЕЙ</span>
+          <h3>{{ t.title }}</h3>
+          <div class="meta">
+            <span>{{ icon("target", 15) }} {{ t.skill }}</span>
+            {% if r %}
+              <span class="badge {{ 'ok' if r.ai_status == 'done' else 'warn' }}">
+                {{ icon("check" if r.ai_status == 'done' else "clock", 14) }} {{ AI_STATUS_LABELS[r.ai_status] }}</span>
+              {% if pr.count > 1 %}
+                <span class="badge ai">{{ icon("refresh", 14) }} {{ pr.count }} талпыныс{% if pr.first_score is not none and pr.last_score is not none %} · {{ pr.first_score }} → {{ pr.last_score }}{% endif %}</span>
+              {% elif pr.last_score is not none %}
+                <span class="badge">{{ pr.last_score }}/{{ t.max_score }}</span>
+              {% endif %}
+            {% endif %}
+          </div>
+          {% if assignment and not r %}<p class="hint" style="margin:6px 0 0">{{ icon("sparkles", 14) }} {{ assignment.reason }}</p>{% endif %}
+        </div>
+        {% if r %}
+          <a class="btn btn-ghost" href="{{ url_for('feedback', response_id=r.response_id) }}">{{ icon("sparkles", 18) }} Кері байланыс</a>
+        {% else %}
+          <a class="btn" href="{{ url_for('task', task_id=t.task_id) }}">Орындау {{ icon("arrow-right", 18) }}</a>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {# 3 — қорытынды тест #}
+  <div class="card task-card {{ 'done' if post_result }}" {% if not practical_done %}style="opacity:.6"{% endif %}>
+    {{ tile("trending" if practical_done else "lock", "green") }}
+    <div class="body">
+      <span class="step-num">3-КЕЗЕҢ</span>
+      <h3>Қорытынды тест</h3>
+      <div class="meta">
+        {% if post_result %}
+          <span class="badge ok">{{ icon("check", 14) }} {{ post_result.score }} / {{ post_result.max_score }}</span>
+          <span class="badge">{{ icon("target", 14) }} {{ test_result.level_name }} → {{ post_result.level_name }}</span>
+        {% elif practical_done %}
+          <span>{{ icon("list", 15) }} 10 жаңа сұрақ · сол тақырыптар</span>
+        {% else %}
+          <span>{{ icon("lock", 15) }} Деңгейлік тапсырманы орындағаннан кейін ашылады</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if post_result %}
+      <a class="btn btn-ghost" href="{{ url_for('posttest_result') }}">{{ icon("chart", 18) }} Салыстыру</a>
+    {% elif practical_done %}
+      <a class="btn" href="{{ url_for('posttest') }}">Бастау {{ icon("arrow-right", 18) }}</a>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

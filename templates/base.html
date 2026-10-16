@@ -14,7 +14,7 @@
       <a class="brand" href="{{ url_for('index') }}"><span class="logo">JS</span> Тәлімгер</a>
       <nav>
         {% if participant %}
-          <a class="nav-link" href="{{ url_for('tasks') }}">{{ icon("list", 18) }}<span class="label">Тапсырмалар</span></a>
+          <a class="nav-link" href="{{ url_for('tasks') }}">{{ icon("list", 18) }}<span class="label">Менің жолым</span></a>
           <span class="nav-code" title="Қатысушы коды">{{ icon("user", 15) }}{{ participant }}</span>
           <a class="nav-link" href="{{ url_for('exit_participant') }}" title="Шығу">{{ icon("logout", 18) }}<span class="label">Шығу</span></a>
         {% endif %}

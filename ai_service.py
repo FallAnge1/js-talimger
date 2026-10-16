@@ -412,3 +412,73 @@ def probe():
         results.append({"provider": provider, "model": model, "ok": ok, "detail": detail,
                         "sec": round(time.time() - t0, 1)})
     return results
+
+
+# ---------- Деңгейлік тапсырма таңдау ----------
+
+SELECT_PROMPT_VERSION = "s1"
+
+SELECT_INSTRUCTION = """Сен JavaScript пәнінің педагогісің.
+Білім алушының диагностикалық тест нәтижесіне қарап, берілген тізімнен оның деңгейіне сәйкес
+және әлсіз тақырыптарын бекітуге ең пайдалы практикалық тапсырманы таңда.
+Тек тізімдегі task_id мәндерін қолдан, тізімде жоқ тапсырманы ойдан шығарма.
+reason өрісінде білім алушыға тікелей қазақ тілінде 1–2 сөйлеммен түсіндір: деңгейі қандай
+және таңдалған тапсырма қай тақырыпты бекітуге көмектеседі. Тек JSON форматында жауап бер."""
+
+SELECT_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {"task_ids": {"type": "ARRAY", "items": {"type": "STRING"}}, "reason": {"type": "STRING"}},
+    "required": ["task_ids", "reason"],
+}
+
+
+def auto_select(candidates, weak_topics, n=1):
+    """ЖИ-сіз таңдау: әлсіз тақырыптармен ең көп сәйкес келетін тапсырмалар."""
+    weak = set(weak_topics)
+    ranked = sorted(enumerate(candidates), key=lambda it: (-len(weak & set(it[1].get("topics", []))), it[0]))
+    return [t for _, t in ranked[:n]]
+
+
+def _auto_reason(level_name, chosen, weak_topics):
+    overlap = [tp for tp in chosen[0].get("topics", []) if tp in weak_topics] if chosen else []
+    if overlap:
+        return f"Сіздің деңгейіңіз — {level_name.lower()}. Бұл тапсырма «{', '.join(overlap)}» тақырыбын бекітуге көмектеседі."
+    return f"Сіздің деңгейіңіз — {level_name.lower()}. Тапсырма осы деңгейге сәйкес таңдалды."
+
+
+def select_tasks(level_name, score, max_score, weak_topics, candidates, n=1):
+    """Деңгей бойынша банктен n тапсырма таңдайды. ЖИ қолжетімсіз болса — тақырыптар сәйкестігі бойынша автоматты."""
+    by_id = {c["task_id"]: c for c in candidates}
+
+    def fallback(why=""):
+        chosen = auto_select(candidates, weak_topics, n)
+        return {"task_ids": [c["task_id"] for c in chosen], "reason": _auto_reason(level_name, chosen, weak_topics),
+                "chosen_by": "auto", "model": "", "prompt_version": SELECT_PROMPT_VERSION, "note": why}
+
+    if os.environ.get("AI_PROVIDER", "gemini").lower() == "mock":
+        return fallback("mock")
+    listing = "\n".join(f"- {c['task_id']}: {c['title']} (тақырыптар: {', '.join(c.get('topics', []))}; дағды: {c['skill']})"
+                        for c in candidates)
+    prompt = (f"ДЕҢГЕЙ: {level_name} ({score}/{max_score} балл)\n"
+              f"ӘЛСІЗ ТАҚЫРЫПТАР (тестте қате жіберілген): {', '.join(weak_topics) or 'жоқ'}\n"
+              f"ТАҢДАЛАТЫН ТАПСЫРМА САНЫ: {n}\n\nТАПСЫРМАЛАР ТІЗІМІ:\n{listing}")
+    try:
+        model, text = _call_ai(prompt, system=SELECT_INSTRUCTION, schema=SELECT_SCHEMA, temperature=0.2)
+        data = _parse_json(text)
+    except (AIError, ValueError) as exc:
+        return fallback(str(exc))
+    ids = []
+    for tid in data.get("task_ids") or []:
+        if isinstance(tid, str) and tid.strip() in by_id and tid.strip() not in ids:
+            ids.append(tid.strip())
+    if not ids:
+        return fallback("ЖИ тізімде жоқ тапсырма ұсынды")
+    for c in auto_select(candidates, weak_topics, len(candidates)):
+        if len(ids) >= n:
+            break
+        if c["task_id"] not in ids:
+            ids.append(c["task_id"])
+    reason = data.get("reason") if isinstance(data.get("reason"), str) else ""
+    reason = re.sub(r"```.*?```", "", reason, flags=re.S).strip()[:500] or _auto_reason(level_name, [by_id[ids[0]]], weak_topics)
+    return {"task_ids": ids[:n], "reason": reason, "chosen_by": "ai", "model": model,
+            "prompt_version": SELECT_PROMPT_VERSION, "note": ""}

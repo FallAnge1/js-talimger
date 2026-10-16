@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(ROOT, "pilot"))
 
 import ai_service  # noqa: E402
 from model_answers import MODEL_ANSWERS  # noqa: E402
-from tasks_data import PRACTICAL_TASKS, TEST  # noqa: E402
+from tasks_data import LEVELS, POST_TEST, PRACTICAL_TASKS, TEST  # noqa: E402
 
 def load_pilot(name):
     path = os.path.join(ROOT, "pilot", name)
@@ -38,7 +38,11 @@ data = {
     "system_instruction": ai_service.SYSTEM_INSTRUCTION,
     "prompt_version": ai_service.PROMPT_VERSION,
     "default_model": os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-    "sample_prompt": ai_service.build_prompt(PRACTICAL_TASKS[0], MODEL_ANSWERS[1]["answer"]),
+    "sample_prompt": ai_service.build_prompt(next(t for t in PRACTICAL_TASKS if t["task_id"] == "P1"), MODEL_ANSWERS[1]["answer"]),
+    "post_test": POST_TEST,
+    "levels": LEVELS,
+    "select_instruction": ai_service.SELECT_INSTRUCTION,
+    "select_prompt_version": ai_service.SELECT_PROMPT_VERSION,
     "hint_instruction": ai_service.HINT_INSTRUCTION,
     "hint_prompt_version": ai_service.HINT_PROMPT_VERSION,
     "model_answers": MODEL_ANSWERS,

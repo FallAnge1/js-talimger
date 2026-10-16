@@ -36,6 +36,11 @@ def ai_calls(monkeypatch):
              "hint_prompts": []}
 
     def fake_call(prompt, system=None, schema=None, temperature=0.2):
+        if schema is ai_service.SELECT_SCHEMA:
+            calls.setdefault("select_prompts", []).append(prompt)
+            if isinstance(calls.get("select_reply"), Exception):
+                raise calls["select_reply"]
+            return "gemini-test", calls.get("select_reply") or "{}"
         if schema is ai_service.HINT_SCHEMA:
             calls["hint_prompts"].append(prompt)
             if isinstance(calls["hint_reply"], Exception):
@@ -68,8 +73,20 @@ def client(app):
     return app.test_client()
 
 
-def login_participant(client, code="JS-001"):
-    return client.post("/start", data={"participant_code": code, "consent": "1"})
+def login_participant(client, code="JS-001", tasks=("P1", "P2", "P3"), pretest=True):
+    """Қатысушыны кіргізеді; pretest=True болса, алдын ала тест нәтижесі мен тапсырма тағайындауын дайындайды."""
+    resp = client.post("/start", data={"participant_code": code, "consent": "1"})
+    store = client.application.store
+    if pretest and not store.get("test_results", code):
+        answers = [{"id": f"q{i}", "topic": f"T{i}", "chosen": 0, "correct": i <= 6} for i in range(1, 11)]
+        store.create("test_results", code, {"participant_code": code, "test_id": "TEST1", "test_version": 1,
+                                            "kind": "pre", "answers": answers, "score": 6, "max_score": 10,
+                                            "level": "mid", "submitted_at": "2026-10-16T08:00:00+00:00"})
+        store.create("assignments", code, {"participant_code": code, "level": "mid", "pre_score": 6,
+                                           "weak_topics": [], "task_ids": list(tasks), "reason": "тест",
+                                           "chosen_by": "auto", "model": "", "prompt_version": "s1",
+                                           "created_at": "2026-10-16T08:00:00+00:00"})
+    return resp
 
 
 def submit(client, task_id="P1", answer=GOOD_ANSWER):
@@ -207,12 +224,13 @@ def test_teacher_score_out_of_range_rejected(client, app, ai_calls):
     assert app.store.get("teacher_review", rid) is None
 
 
-def test_test_scoring_and_export(client, app):
-    login_participant(client)
+def test_test_scoring_and_export(client, app, ai_calls):
+    login_participant(client, pretest=False)
     answers = {f"q{i}": "0" for i in range(1, 11)}
     client.post("/test", data=answers)
     result = app.store.get("test_results", "JS-001")
     assert result["score"] == 3  # q5, q7, q10 дұрыс жауабы — 0-нұсқа
+    assert result["level"] == "low"
     client.post("/test", data={f"q{i}": "1" for i in range(1, 11)})
     assert app.store.get("test_results", "JS-001")["score"] == 3  # қайта тапсыру нәтижені өзгертпейді
 

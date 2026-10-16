@@ -90,9 +90,9 @@ s.addText([
 card(s, 0.5, 2.85, 5.4, 2.1, HEX.lt2, "question-card");
 s.addText([
   { text: "Зерттеу сұрағы", options: { bold: true, fontSize: 16, color: C.text1, breakLine: true } },
-  { text: "Білім алушылар массивтермен, циклдермен және DOM оқиғаларымен жұмыс істеуге арналған тапсырмаларда қандай қателер жібереді және ЖИ кері байланысы оларды педагог бағасымен салыстырғанда қаншалықты дұрыс анықтайды?", options: { italic: true, fontSize: 15, color: C.text2 } },
+  { text: "Білім алушылар JS тапсырмаларында қандай қателер жібереді, ЖИ оларды педагогпен салыстырғанда қаншалықты дұрыс анықтайды және деңгейлік тапсырмадан кейін деңгейі өзгере ме?", options: { italic: true, fontSize: 15, color: C.text2 } },
 ], { x: 0.75, y: 3.0, w: 4.9, h: 1.8, valign: "top", margin: 0, objectName: "question", isTextBox: true });
-const stats = [["10", "сұрақтық диагностикалық тест"], ["3", "практикалық тапсырма (код + түсіндірме)"], ["4 × 2", "рубрика: 4 критерий, 0–2 балдан"]];
+const stats = [["20", "сұрақ: диагностикалық + қорытынды тест"], ["3 × 5", "деңгей × тапсырма банкі, ЖИ таңдайды"], ["4 × 2", "рубрика: 4 критерий, 0–2 балдан"]];
 stats.forEach(([num, label], i) => {
   const y = 1.2 + i * 1.27;
   card(s, 6.3, y, 3.2, 1.1, HEX.lt2, `stat-card-${i}`);
@@ -116,7 +116,7 @@ s.addNotes("Архитектура: қатысушы мен зерттеуші �
 // ---------- 4. ЖИ интеграциясы ----------
 s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Қосымша" });
 s.addText("ЖИ интеграциясы және педагог тексеруі", { placeholder: "title" });
-const steps = ["Жауап енгізу", "Бұлтқа сақтау", "Gemini: рубрика бойынша талдау", "JSON мен балды тексеру", "Педагог тексеруі", "CSV экспорт"];
+const steps = ["Тест → деңгей", "ЖИ тапсырма таңдайды", "Жауап → бұлт", "ЖИ: рубрика бойынша талдау", "Педагог тексеруі", "Қорытынды тест"];
 steps.forEach((label, i) => {
   const x = 0.5 + i * 1.5;
   badge(s, String(i + 1), x + 0.45, 1.2, 0.55, 18, `step-${i + 1}`);
@@ -173,14 +173,15 @@ pres.addSection({ title: "Нәтижелер" });
 s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Нәтижелер" });
 s.addText("Сынақ нәтижелері", { placeholder: "title" });
 card(s, 0.5, 1.2, 3.3, 3.75, HEX.lt2, "tech-card");
-s.addText("16/16", { x: 0.7, y: 1.35, w: 2.9, h: 0.95, fontSize: 48, bold: true, color: C.accent3, margin: 0, fontFace: "Cambria", objectName: "tech-num", isTextBox: true });
+s.addText("40/40", { x: 0.7, y: 1.35, w: 2.9, h: 0.95, fontSize: 48, bold: true, color: C.accent3, margin: 0, fontFace: "Cambria", objectName: "tech-num", isTextBox: true });
 s.addText([
   { text: "техникалық сынақ өтті", options: { bold: true, color: C.text1, breakLine: true } },
   { text: "дұрыс және бос жауап", options: { bullet: true, breakLine: true } },
   { text: "API қатесі, қайта жіберу", options: { bullet: true, breakLine: true } },
   { text: "бұзылған JSON, балл аралығы", options: { bullet: true, breakLine: true } },
   { text: "рұқсатсыз кіру, CSV экспорт", options: { bullet: true, breakLine: true } },
-  { text: "ЖИ лимиті → қосалқы модель", options: { bullet: true } },
+  { text: "ЖИ лимиті → қосалқы модель", options: { bullet: true, breakLine: true } },
+  { text: "деңгей, бұғаттау, қорытынды тест", options: { bullet: true } },
 ], { x: 0.7, y: 2.35, w: 2.95, h: 2.5, fontSize: 14, color: C.text2, valign: "top", margin: 0, paraSpaceAfter: 4, objectName: "tech-list", isTextBox: true });
 
 if (pilot) {

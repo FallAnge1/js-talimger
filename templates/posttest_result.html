@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
+{% block title %}Қорытынды нәтиже — JS-Тәлімгер{% endblock %}
+{% block content %}
+{% set TONE = {"low": "amber", "mid": "blue", "high": "green"} %}
+<a class="back" href="{{ url_for('tasks') }}">{{ icon("arrow-left", 16) }} Менің жолым</a>
+<h1>Деңгейіңіз қалай өзгерді?</h1>
+
+<div class="card section">
+  <div class="compare">
+    <div class="compare-side">
+      <span class="muted small">Диагностикалық тест</span>
+      <div class="score-ring" style="--p: {{ (100 * pre.score / pre.max_score)|round|int }}"><div><b>{{ pre.score }}/{{ pre.max_score }}</b><span>балл</span></div></div>
+      <span class="row" style="gap:8px">{{ tile("target", TONE[pre.level], 18) }}<b>{{ pre.level_name }}</b></span>
+    </div>
+    <div class="compare-mid">
+      {% set gain = post.score - pre.score %}
+      {% if change > 0 %}
+        <span class="badge ok big">{{ icon("trending", 18) }} Деңгей көтерілді</span>
+      {% elif change < 0 %}
+        <span class="badge bad big">{{ icon("alert", 18) }} Деңгей төмендеді</span>
+      {% else %}
+        <span class="badge big">{{ icon("refresh", 18) }} Деңгей өзгерген жоқ</span>
+      {% endif %}
+      <span class="muted small">{{ '%+d'|format(gain) if gain else '0' }} балл</span>
+      <span class="attempt-arrow">{{ icon("arrow-right", 28) }}</span>
+    </div>
+    <div class="compare-side">
+      <span class="muted small">Қорытынды тест</span>
+      <div class="score-ring" style="--p: {{ (100 * post.score / post.max_score)|round|int }}"><div><b>{{ post.score }}/{{ post.max_score }}</b><span>балл</span></div></div>
+      <span class="row" style="gap:8px">{{ tile("target", TONE[post.level], 18) }}<b>{{ post.level_name }}</b></span>
+    </div>
+  </div>
+</div>
+
+<div class="card section">
+  <p class="section-title">{{ icon("list", 16) }} Тақырыптар бойынша: бастапқы → қорытынды</p>
+  {% for t in topics %}
+    <div class="result-row">
+      <span class="qnum">{{ loop.index }}</span>
+      <span class="label">{{ t.topic }}</span>
+      <span class="badge {{ 'ok' if t.pre else 'bad' }}">{{ icon("check" if t.pre else "x", 14) }}</span>
+      <span class="attempt-arrow">{{ icon("arrow-right", 14) }}</span>
+      <span class="badge {{ 'ok' if t.post else 'bad' }}">{{ icon("check" if t.post else "x", 14) }}</span>
+      {% if not t.pre and t.post %}<span class="badge ai">меңгерілді</span>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+<p class="hint center">{{ icon("info", 14) }} Зерттеуге қатысқаныңызға рахмет! Нәтижелер анонимді түрде сақталды.</p>
+{% endblock %}

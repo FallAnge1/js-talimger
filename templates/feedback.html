@@ -122,6 +122,16 @@
   </div>
 </div>
 
+{% if post_ready %}
+<div class="card section row-between" style="border-color:#bfe5cc">
+  <div class="row">{{ tile("trending", "green") }}
+    <div><h2 style="margin:0">Келесі қадам: қорытынды тест</h2>
+      <p class="muted small" style="margin:0">Түзету мен кеңесті пайдаланып болған соң, деңгейіңіздің өзгергенін тексеріңіз.</p></div>
+  </div>
+  <a class="btn" href="{{ url_for('posttest') }}">Қорытынды тест {{ icon("arrow-right", 18) }}</a>
+</div>
+{% endif %}
+
 {% if owner %}
 <div class="card section stack-lg" id="revise">
   <div class="row">
