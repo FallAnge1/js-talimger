@@ -162,9 +162,12 @@ def gemini_models():
 
 def backup_models():
     # gpt-oss-20b әдейі алынбаған: сынақта жауаптағы нұсқауды орындап, кодсыз жауапқа 8 балл қойды.
-    models = os.environ.get("BACKUP_AI_MODELS") or os.environ.get("BACKUP_AI_MODEL") \
-        or "openai/gpt-oss-120b,qwen/qwen3.8-27b"
-    return [m.strip() for m in models.split(",") if m.strip()]
+    if os.environ.get("BACKUP_AI_MODELS"):
+        return [m.strip() for m in os.environ["BACKUP_AI_MODELS"].split(",") if m.strip()]
+    chain = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
+    # Ескі BACKUP_AI_MODEL айнымалысы тек бірінші модельді ауыстырады, тізбектің қалғаны сақталады
+    first = os.environ.get("BACKUP_AI_MODEL", "").strip()
+    return ([first] if first else []) + [m for m in chain if m != first]
 
 
 def _call_gemini(prompt, system=None, schema=None, temperature=0.2, models=None):

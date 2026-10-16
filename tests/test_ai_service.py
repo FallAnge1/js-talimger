@@ -189,3 +189,11 @@ def test_probe_reports_each_model(monkeypatch):
     res = ai_service.probe()
     assert [(r["provider"], r["model"], r["ok"]) for r in res] == [
         ("Gemini", "main", False), ("Gemini", "lite", True), ("Groq", "big", True), ("Groq", "small", False)]
+
+
+def test_single_backup_model_keeps_rest_of_chain(monkeypatch):
+    monkeypatch.delenv("BACKUP_AI_MODELS", raising=False)
+    monkeypatch.setenv("BACKUP_AI_MODEL", "openai/gpt-oss-120b")
+    assert ai_service.backup_models() == ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
+    monkeypatch.setenv("BACKUP_AI_MODEL", "other")
+    assert ai_service.backup_models() == ["other", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
