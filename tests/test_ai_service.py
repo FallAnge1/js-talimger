@@ -91,13 +91,17 @@ def backup(monkeypatch):
 
     def fake_post(url, json=None, headers=None, timeout=None):
         log["bodies"].append(json)
+        if "replies" in log:
+            return log["replies"].pop(0)
         return log["reply"]
 
     monkeypatch.setenv("GROQ_API_KEY", "test")
     monkeypatch.setenv("BACKUP_AI_MODEL", "test-model")
     monkeypatch.delenv("AI_FORCE_BACKUP", raising=False)
     monkeypatch.delenv("BACKUP_AI_KEY", raising=False)
+    monkeypatch.delenv("BACKUP_AI_MODELS", raising=False)
     monkeypatch.setattr(ai_service, "_call_gemini", fake_gemini)
+    monkeypatch.setattr(ai_service.time, "sleep", lambda s: None)
     monkeypatch.setattr(ai_service.requests, "post", fake_post)
     return log
 
@@ -142,3 +146,27 @@ def test_force_backup_skips_gemini(backup, monkeypatch):
     backup["reply"] = FakeChat(200, "{}")
     ai_service._call_ai("prompt")
     assert backup["gemini"] == 0 and len(backup["bodies"]) == 1
+
+
+def test_backup_model_chain_on_rate_limit(backup, monkeypatch):
+    monkeypatch.setenv("BACKUP_AI_MODELS", "big-model, second-model")
+    backup["replies"] = [FakeChat(429), FakeChat(200, "{}")]
+    model, _ = ai_service._call_ai("prompt")
+    assert [b["model"] for b in backup["bodies"]] == ["big-model", "second-model"]
+    assert model == "groq:second-model"
+
+
+def test_backup_retries_invalid_json_once(backup, monkeypatch):
+    monkeypatch.setenv("BACKUP_AI_MODELS", "big-model")
+    backup["replies"] = [FakeChat(400), FakeChat(200, "{}")]
+    model, _ = ai_service._call_ai("prompt")
+    assert len(backup["bodies"]) == 2 and model == "groq:big-model"
+
+
+def test_default_chain_excludes_unsafe_model(backup, monkeypatch):
+    monkeypatch.delenv("BACKUP_AI_MODEL")
+    backup["replies"] = [FakeChat(429), FakeChat(429)]
+    with pytest.raises(ai_service.AIError):
+        ai_service._call_ai("prompt")
+    used = [b["model"] for b in backup["bodies"]]
+    assert used == ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"] and "openai/gpt-oss-20b" not in used

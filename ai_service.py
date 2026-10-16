@@ -215,28 +215,33 @@ def _call_backup(prompt, system=None, schema=None, temperature=0.2):
     if not api_key:
         raise AIError("Қосалқы ЖИ кілті (GROQ_API_KEY) бапталмаған")
     url = os.environ.get("BACKUP_AI_URL", "https://api.groq.com/openai/v1/chat/completions")
-    model = os.environ.get("BACKUP_AI_MODEL", "openai/gpt-oss-120b")
+    # Модельдер тізбегі: біреуінің минуттық лимиті (HTTP 429) біткенде келесісіне көшеміз.
+    # gpt-oss-20b әдейі алынбаған: сынақта жауаптағы нұсқауды орындап, кодсыз жауапқа 8 балл қойды.
+    models = os.environ.get("BACKUP_AI_MODELS") or os.environ.get("BACKUP_AI_MODEL") \
+        or "openai/gpt-oss-120b,qwen/qwen3.8-27b"
     name = os.environ.get("BACKUP_AI_NAME", "groq")
     example = json.dumps(_schema_example(schema or RESPONSE_SCHEMA), ensure_ascii=False)
-    body = {
-        "model": model,
-        "temperature": temperature,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": (system or SYSTEM_INSTRUCTION)
-             + "\nЖауап тек осы құрылымдағы JSON объектісі болсын: " + example},
-            {"role": "user", "content": prompt},
-        ],
-    }
-    for attempt in range(2):
-        try:
-            resp = requests.post(url, json=body, headers={"Authorization": f"Bearer {api_key}"}, timeout=40)
-        except requests.RequestException as exc:
-            raise AIError(f"Қосалқы ЖИ желі қатесі: {type(exc).__name__}") from exc
-        if resp.status_code in (500, 502, 503) and attempt == 0:
-            time.sleep(2)
-            continue
-        break
+    messages = [
+        {"role": "system", "content": (system or SYSTEM_INSTRUCTION)
+         + "\nЖауап тек осы құрылымдағы JSON объектісі болсын: " + example},
+        {"role": "user", "content": prompt},
+    ]
+    resp = None
+    for model in [m.strip() for m in models.split(",") if m.strip()]:
+        body = {"model": model, "temperature": temperature, "response_format": {"type": "json_object"},
+                "messages": messages}
+        for attempt in range(2):
+            try:
+                resp = requests.post(url, json=body, headers={"Authorization": f"Bearer {api_key}"}, timeout=40)
+            except requests.RequestException as exc:
+                raise AIError(f"Қосалқы ЖИ желі қатесі: {type(exc).__name__}") from exc
+            # 400 — модель жарамсыз JSON берген (json_validate_failed), 5xx — уақытша ақау: бір рет қайталаймыз
+            if resp.status_code in (400, 500, 502, 503) and attempt == 0:
+                time.sleep(2)
+                continue
+            break
+        if resp.status_code != 429:
+            break
     if resp.status_code != 200:
         raise AIError(f"Қосалқы ЖИ қатесі: HTTP {resp.status_code}")
     try:
