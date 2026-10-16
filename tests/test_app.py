@@ -228,3 +228,13 @@ def test_participant_code_validation(client):
     assert "Қатысушы коды" in page
     with client.session_transaction() as s:
         assert "participant" not in s
+
+
+def test_ai_check_page_requires_researcher_and_runs_probe(client, monkeypatch):
+    assert client.get("/researcher/ai-check").status_code == 302
+    client.post("/researcher/login", data={"password": "test-pass"})
+    page = client.get("/researcher/ai-check").get_data(as_text=True)
+    assert "GROQ_API_KEY бапталмаған" in page
+    monkeypatch.setattr(ai_service, "probe", lambda: [{"provider": "Groq", "model": "m", "ok": True, "detail": "жауап берді", "sec": 0.5}])
+    page = client.post("/researcher/ai-check").get_data(as_text=True)
+    assert "жауап берді" in page

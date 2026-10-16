@@ -612,6 +612,17 @@ def create_app(store=None):
             store_name=store.name,
         )
 
+    @app.route("/researcher/ai-check", methods=["GET", "POST"])
+    @researcher_required
+    def ai_check():
+        """ЖИ тізбегіндегі әр модельдің қолжетімділігін тексеру (тек батырма басылғанда сұраныс жіберіледі)."""
+        results = ai_service.probe() if request.method == "POST" else None
+        chain = [("Gemini", m) for m in ai_service.gemini_models()]
+        backup_on = bool(os.environ.get("BACKUP_AI_KEY") or os.environ.get("GROQ_API_KEY"))
+        if backup_on:
+            chain += [("Groq", m) for m in ai_service.backup_models()]
+        return render_template("ai_check.html", results=results, chain=chain, backup_on=backup_on)
+
     @app.route("/researcher/response/<response_id>", methods=["GET", "POST"])
     @researcher_required
     def review(response_id):

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon, tile with context %}
+{% block title %}ЖИ сервистері — JS-Тәлімгер{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('researcher') }}">{{ icon("arrow-left", 16) }} Зерттеуші беті</a>
+<div class="row" style="margin:8px 0 18px">
+  {{ tile("sparkles", "violet") }}
+  <div>
+    <h1 style="margin:0">ЖИ сервистерін тексеру</h1>
+    <p class="muted small" style="margin:0">Жауапты талдау осы ретпен жүреді: бір модель жауап бермесе — келесісі.</p>
+  </div>
+</div>
+
+<div class="card stack-lg">
+  <p class="section-title" style="margin:0">{{ icon("list", 16) }} Тізбек</p>
+  <div class="attempts" style="margin:0">
+    {% for provider, model in chain %}
+      {% if not loop.first %}<span class="attempt-arrow">{{ icon("arrow-right", 16) }}</span>{% endif %}
+      <span class="attempt"><span>{{ loop.index }} · {{ provider }}</span><b class="mono small">{{ model }}</b></span>
+    {% endfor %}
+  </div>
+  {% if not backup_on %}
+    <div class="flash flash-warning">{{ icon("alert", 18) }}<span>Қосалқы ЖИ (Groq) өшірулі: серверде GROQ_API_KEY бапталмаған.</span></div>
+  {% endif %}
+
+  {% if results %}
+    <table class="table">
+      <thead><tr><th>#</th><th>Сервис</th><th>Модель</th><th>Нәтиже</th><th>Уақыт</th></tr></thead>
+      <tbody>
+      {% for r in results %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ r.provider }}</td>
+          <td class="mono small">{{ r.model }}</td>
+          <td>{% if r.ok %}<span class="badge ok">{{ icon("check", 14) }} {{ r.detail }}</span>
+              {% else %}<span class="badge bad">{{ icon("x", 14) }} {{ r.detail }}</span>{% endif %}</td>
+          <td class="nowrap">{{ r.sec }} с</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="hint">{{ icon("info", 14) }} HTTP 429 — тегін лимит уақытша таусылды; бұл кезде сұраныс келесі модельге өтеді.</p>
+  {% endif %}
+
+  <form method="post" data-submit-once>
+    <button class="btn" type="submit" data-loading="Тексерілуде… (10–40 с)">{{ icon("refresh", 18) }} Барлық модельді тексеру</button>
+  </form>
+  <p class="hint">Әр модельге бір қысқа сұраныс жіберіледі (тегін лимиттен аз жұмсалады).</p>
+</div>
+{% endblock %}

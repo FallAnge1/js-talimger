@@ -154,13 +154,24 @@ def _parse_json(text):
     return json.loads(text)
 
 
-def _call_gemini(prompt, system=None, schema=None, temperature=0.2):
+def gemini_models():
+    models = [os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")]
+    fallback = os.environ.get("GEMINI_FALLBACK_MODELS", "gemini-3.1-flash-lite")
+    return models + [m.strip() for m in fallback.split(",") if m.strip() and m.strip() not in models]
+
+
+def backup_models():
+    # gpt-oss-20b әдейі алынбаған: сынақта жауаптағы нұсқауды орындап, кодсыз жауапқа 8 балл қойды.
+    models = os.environ.get("BACKUP_AI_MODELS") or os.environ.get("BACKUP_AI_MODEL") \
+        or "openai/gpt-oss-120b,qwen/qwen3.8-27b"
+    return [m.strip() for m in models.split(",") if m.strip()]
+
+
+def _call_gemini(prompt, system=None, schema=None, temperature=0.2, models=None):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise AIError("GEMINI_API_KEY орта айнымалысы бапталмаған")
-    models = [os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")]
-    fallback = os.environ.get("GEMINI_FALLBACK_MODELS", "gemini-3.1-flash-lite")
-    models += [m.strip() for m in fallback.split(",") if m.strip() and m.strip() not in models]
+    models = models or gemini_models()
     body = {
         "systemInstruction": {"parts": [{"text": system or SYSTEM_INSTRUCTION}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -209,16 +220,14 @@ def _schema_example(schema):
     return {"STRING": "...", "INTEGER": 0, "BOOLEAN": True}.get(kind, "...")
 
 
-def _call_backup(prompt, system=None, schema=None, temperature=0.2):
+def _call_backup(prompt, system=None, schema=None, temperature=0.2, models=None):
     """Қосалқы тегін ЖИ (әдепкі — Groq, OpenAI-үйлесімді API). Gemini жауап бермегенде шақырылады."""
     api_key = os.environ.get("BACKUP_AI_KEY") or os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise AIError("Қосалқы ЖИ кілті (GROQ_API_KEY) бапталмаған")
     url = os.environ.get("BACKUP_AI_URL", "https://api.groq.com/openai/v1/chat/completions")
     # Модельдер тізбегі: біреуінің минуттық лимиті (HTTP 429) біткенде келесісіне көшеміз.
-    # gpt-oss-20b әдейі алынбаған: сынақта жауаптағы нұсқауды орындап, кодсыз жауапқа 8 балл қойды.
-    models = os.environ.get("BACKUP_AI_MODELS") or os.environ.get("BACKUP_AI_MODEL") \
-        or "openai/gpt-oss-120b,qwen/qwen3.8-27b"
+    models = models or backup_models()
     name = os.environ.get("BACKUP_AI_NAME", "groq")
     example = json.dumps(_schema_example(schema or RESPONSE_SCHEMA), ensure_ascii=False)
     messages = [
@@ -227,7 +236,7 @@ def _call_backup(prompt, system=None, schema=None, temperature=0.2):
         {"role": "user", "content": prompt},
     ]
     resp = None
-    for model in [m.strip() for m in models.split(",") if m.strip()]:
+    for model in models:
         body = {"model": model, "temperature": temperature, "response_format": {"type": "json_object"},
                 "messages": messages}
         for attempt in range(2):
@@ -376,3 +385,27 @@ def generate_hint(task, answer_text, errors, previous_hints, question=""):
     if not hint:
         raise AIError("ЖИ кеңесі бос немесе құрылымы бұзылған")
     return model, hint[:1000], HINT_PROMPT_VERSION
+
+
+# ---------- ЖИ сервистерін тексеру (зерттеуші беті) ----------
+
+PROBE_SCHEMA = {"type": "OBJECT", "properties": {"ok": {"type": "BOOLEAN"}}, "required": ["ok"]}
+
+
+def probe():
+    """Тізбектегі әр модельге қысқа сұраныс жіберіп, қолжетімділігін тексереді (кілттер көрсетілмейді)."""
+    chain = [("Gemini", m, _call_gemini) for m in gemini_models()]
+    if os.environ.get("BACKUP_AI_KEY") or os.environ.get("GROQ_API_KEY"):
+        chain += [(os.environ.get("BACKUP_AI_NAME", "groq").capitalize(), m, _call_backup) for m in backup_models()]
+    results = []
+    for provider, model, call in chain:
+        t0 = time.time()
+        try:
+            _, text = call('{"ok": true} деп жауап бер.', system="Тек JSON қайтар.", schema=PROBE_SCHEMA,
+                           temperature=0, models=[model])
+            ok, detail = True, "жауап берді"
+        except AIError as exc:
+            ok, detail = False, str(exc)
+        results.append({"provider": provider, "model": model, "ok": ok, "detail": detail,
+                        "sec": round(time.time() - t0, 1)})
+    return results

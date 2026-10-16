@@ -170,3 +170,22 @@ def test_default_chain_excludes_unsafe_model(backup, monkeypatch):
         ai_service._call_ai("prompt")
     used = [b["model"] for b in backup["bodies"]]
     assert used == ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"] and "openai/gpt-oss-20b" not in used
+
+
+def test_probe_reports_each_model(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "g")
+    monkeypatch.setenv("GEMINI_MODEL", "main")
+    monkeypatch.setenv("GEMINI_FALLBACK_MODELS", "lite")
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    monkeypatch.setenv("BACKUP_AI_MODELS", "big,small")
+    monkeypatch.setattr(ai_service.time, "sleep", lambda s: None)
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        if "generativelanguage" in url:
+            return FakeResp(429) if "/main:" in url else FakeResp(200, '{"ok": true}')
+        return FakeChat(200, '{"ok": true}') if json["model"] == "big" else FakeChat(429)
+
+    monkeypatch.setattr(ai_service.requests, "post", fake_post)
+    res = ai_service.probe()
+    assert [(r["provider"], r["model"], r["ok"]) for r in res] == [
+        ("Gemini", "main", False), ("Gemini", "lite", True), ("Groq", "big", True), ("Groq", "small", False)]
