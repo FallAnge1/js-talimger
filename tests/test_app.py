@@ -48,6 +48,8 @@ def ai_calls(monkeypatch):
         return "gemini-test", calls["reply"]
 
     monkeypatch.setenv("AI_PROVIDER", "gemini")
+    for name in ("GROQ_API_KEY", "BACKUP_AI_KEY", "AI_FORCE_BACKUP"):
+        monkeypatch.delenv(name, raising=False)  # тесттер нақты қосалқы ЖИ-ге шықпауы тиіс
     monkeypatch.setattr(ai_service, "_call_gemini", fake_call)
     return calls
 

@@ -199,6 +199,68 @@ def _call_gemini(prompt, system=None, schema=None, temperature=0.2):
     return model, text
 
 
+def _schema_example(schema):
+    """JSON схемасынан қысқа үлгі құрастырады (JSON режимінде схема қабылдамайтын сервистер үшін)."""
+    kind = schema.get("type")
+    if kind == "OBJECT":
+        return {k: _schema_example(v) for k, v in schema.get("properties", {}).items()}
+    if kind == "ARRAY":
+        return [_schema_example(schema.get("items", {"type": "STRING"}))]
+    return {"STRING": "...", "INTEGER": 0, "BOOLEAN": True}.get(kind, "...")
+
+
+def _call_backup(prompt, system=None, schema=None, temperature=0.2):
+    """Қосалқы тегін ЖИ (әдепкі — Groq, OpenAI-үйлесімді API). Gemini жауап бермегенде шақырылады."""
+    api_key = os.environ.get("BACKUP_AI_KEY") or os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise AIError("Қосалқы ЖИ кілті (GROQ_API_KEY) бапталмаған")
+    url = os.environ.get("BACKUP_AI_URL", "https://api.groq.com/openai/v1/chat/completions")
+    model = os.environ.get("BACKUP_AI_MODEL", "openai/gpt-oss-120b")
+    name = os.environ.get("BACKUP_AI_NAME", "groq")
+    example = json.dumps(_schema_example(schema or RESPONSE_SCHEMA), ensure_ascii=False)
+    body = {
+        "model": model,
+        "temperature": temperature,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": (system or SYSTEM_INSTRUCTION)
+             + "\nЖауап тек осы құрылымдағы JSON объектісі болсын: " + example},
+            {"role": "user", "content": prompt},
+        ],
+    }
+    for attempt in range(2):
+        try:
+            resp = requests.post(url, json=body, headers={"Authorization": f"Bearer {api_key}"}, timeout=40)
+        except requests.RequestException as exc:
+            raise AIError(f"Қосалқы ЖИ желі қатесі: {type(exc).__name__}") from exc
+        if resp.status_code in (500, 502, 503) and attempt == 0:
+            time.sleep(2)
+            continue
+        break
+    if resp.status_code != 200:
+        raise AIError(f"Қосалқы ЖИ қатесі: HTTP {resp.status_code}")
+    try:
+        text = resp.json()["choices"][0]["message"]["content"] or ""
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise AIError("Қосалқы ЖИ жауабында мәтін жоқ") from exc
+    return f"{name}:{model}", text
+
+
+def _call_ai(prompt, system=None, schema=None, temperature=0.2):
+    """Алдымен Gemini (негізгі және қосалқы модельдер), ол жауап бермесе — қосалқы тегін ЖИ."""
+    if os.environ.get("AI_FORCE_BACKUP") == "1":
+        return _call_backup(prompt, system=system, schema=schema, temperature=temperature)
+    try:
+        return _call_gemini(prompt, system=system, schema=schema, temperature=temperature)
+    except AIError as gemini_error:
+        if not (os.environ.get("BACKUP_AI_KEY") or os.environ.get("GROQ_API_KEY")):
+            raise
+        try:
+            return _call_backup(prompt, system=system, schema=schema, temperature=temperature)
+        except AIError as backup_error:
+            raise AIError(f"{gemini_error}; {backup_error}") from backup_error
+
+
 def _call_mock(task, answer_text):
     """Кілтсіз жергілікті тексеруге арналған жалған ЖИ (нақты талдау жасамайды)."""
     has_return = "return" in answer_text
@@ -227,7 +289,7 @@ def analyze_answer(task, answer_text):
     if provider == "mock":
         model, text = _call_mock(task, answer_text)
     else:
-        model, text = _call_gemini(prompt)
+        model, text = _call_ai(prompt)
 
     try:
         data = _parse_json(text)
@@ -299,7 +361,7 @@ def generate_hint(task, answer_text, errors, previous_hints, question=""):
     if provider == "mock":
         return "mock", "Бұл — тестілік (mock) кеңес: бастапқы мәнді теріс сандармен тексеріп көріңіз.", HINT_PROMPT_VERSION
     prompt = build_hint_prompt(task, answer_text, errors, previous_hints, question)
-    model, text = _call_gemini(prompt, system=HINT_INSTRUCTION, schema=HINT_SCHEMA, temperature=0.4)
+    model, text = _call_ai(prompt, system=HINT_INSTRUCTION, schema=HINT_SCHEMA, temperature=0.4)
     try:
         hint = _parse_json(text).get("hint", "")
     except (ValueError, AttributeError):

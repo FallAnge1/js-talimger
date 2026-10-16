@@ -68,3 +68,77 @@ def test_all_models_unavailable_raises_ai_error(calls):
     calls["replies"] = [FakeResp(429), FakeResp(429)]
     with pytest.raises(ai_service.AIError):
         ai_service._call_gemini("prompt")
+
+
+# ---------- қосалқы тегін ЖИ (Groq) ----------
+
+class FakeChat:
+    def __init__(self, status, content=""):
+        self.status_code = status
+        self._content = content
+
+    def json(self):
+        return {"choices": [{"message": {"content": self._content}}]}
+
+
+@pytest.fixture
+def backup(monkeypatch):
+    log = {"bodies": [], "gemini": 0}
+
+    def fake_gemini(prompt, system=None, schema=None, temperature=0.2):
+        log["gemini"] += 1
+        raise ai_service.AIError("Gemini API қатесі: HTTP 429")
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        log["bodies"].append(json)
+        return log["reply"]
+
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setenv("BACKUP_AI_MODEL", "test-model")
+    monkeypatch.delenv("AI_FORCE_BACKUP", raising=False)
+    monkeypatch.delenv("BACKUP_AI_KEY", raising=False)
+    monkeypatch.setattr(ai_service, "_call_gemini", fake_gemini)
+    monkeypatch.setattr(ai_service.requests, "post", fake_post)
+    return log
+
+
+def test_backup_used_when_gemini_fails(backup):
+    backup["reply"] = FakeChat(200, '{"hint": "Кеңес"}')
+    model, text = ai_service._call_ai("prompt", system="SYS", schema=ai_service.HINT_SCHEMA)
+    assert model == "groq:test-model" and text == '{"hint": "Кеңес"}'
+    body = backup["bodies"][0]
+    assert body["response_format"] == {"type": "json_object"}
+    assert body["messages"][0]["content"].startswith("SYS") and '"hint"' in body["messages"][0]["content"]
+
+
+def test_backup_feedback_is_validated_like_gemini(backup):
+    import json as _json
+    from tasks_data import PRACTICAL_TASKS
+
+    reply = {"strengths": ["ok"], "errors": [], "recommendation": "Жарайсыз", "criteria_scores": [],
+             "suggested_score": 8, "needs_review": False}
+    backup["reply"] = FakeChat(200, _json.dumps(reply, ensure_ascii=False))
+    result = ai_service.analyze_answer(PRACTICAL_TASKS[0], "function f(){ return 1; }")
+    assert result["status"] == "done" and result["model"] == "groq:test-model"
+    assert result["feedback"]["suggested_score"] == 8
+
+
+def test_both_providers_fail_raises_combined_error(backup):
+    backup["reply"] = FakeChat(429)
+    with pytest.raises(ai_service.AIError) as err:
+        ai_service._call_ai("prompt")
+    assert "Gemini" in str(err.value) and "Қосалқы ЖИ" in str(err.value)
+
+
+def test_no_backup_key_keeps_gemini_error(backup, monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY")
+    with pytest.raises(ai_service.AIError) as err:
+        ai_service._call_ai("prompt")
+    assert backup["bodies"] == [] and "Gemini" in str(err.value)
+
+
+def test_force_backup_skips_gemini(backup, monkeypatch):
+    monkeypatch.setenv("AI_FORCE_BACKUP", "1")
+    backup["reply"] = FakeChat(200, "{}")
+    ai_service._call_ai("prompt")
+    assert backup["gemini"] == 0 and len(backup["bodies"]) == 1

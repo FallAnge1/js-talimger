@@ -113,6 +113,8 @@ python check_ai.py
 |---|---|
 | `GEMINI_API_KEY` | Gemini API кілті (тек серверде) |
 | `GEMINI_MODEL` | Модель атауы, әдепкі `gemini-3.8-flash` |
+| `GROQ_API_KEY` | Қосалқы тегін ЖИ (Groq) кілті: Gemini модельдері жауап бермесе қолданылады |
+| `BACKUP_AI_MODEL` | Қосалқы ЖИ моделі, әдепкі `openai/gpt-oss-120b` (`BACKUP_AI_URL`, `BACKUP_AI_KEY` арқылы басқа OpenAI-үйлесімді сервисті қосуға болады) |
 | `GEMINI_FALLBACK_MODELS` | Негізгі модельдің лимиті бітсе (HTTP 429/503) қолданылатын модельдер, әдепкі `gemini-3.1-flash-lite` |
 | `AI_PROVIDER` | `gemini` немесе `mock` |
 | `FIREBASE_CREDENTIALS_JSON` / `GOOGLE_APPLICATION_CREDENTIALS` | Firestore-ға қосылу кілті (мәтін немесе файл жолы) |
